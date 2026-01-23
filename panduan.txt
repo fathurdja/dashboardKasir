@@ -1,0 +1,72 @@
+Panduan Deploy Laravel & Filament di aaPanel (IP & Port)
+1. Perbaikan Environment & Ekstensi PHP
+
+Jika muncul error `ext-intl` atau `mb_split()` hilang:
+
+• `apt-get update`
+
+• `apt-get install php8.3-intl php8.3-mbstring`
+
+• Atau via aaPanel: App Store > PHP 8.3 > Settings > Install Extensions (intl, mbstring, fileinfo).
+
+• Restart PHP 8.3 dari menu Service.
+
+2. Pengaturan Permission (Penting)
+
+Jalankan agar server (user `www`) bisa membaca file:
+
+• `chown -R www:www /www/wwwroot/kasir_app.com`
+
+• `chmod -R 755 /www/wwwroot/kasir_app.com`
+
+• `chmod -R 775 /www/wwwroot/kasir_`
+
+• `chmod -R 775 /www/wwwroot/kasir_`
+
+3. Konfigurasi Nginx (Atasi 404 & Livewire Error)
+
+Buka menu Config di aaPanel Website, pastikan ada blok ini:
+
+```
+
+location / {
+
+    try_files $uri $uri/ /index.php?$query_string;
+
+}
+
+location ^~ /livewire {
+
+    try_files $uri $uri/ /index.php?$query_string;
+
+}
+
+```
+
+• Matikan Anti-XSS attack di menu Site Directory.
+
+• Set Running Directory ke `/public`.
+
+4. Perintah Artisan & Database
+
+• `php artisan key:generate` (Jika app key kosong)
+
+• `php artisan storage:link` (Wajib untuk aset)
+
+• `php artisan migrate --seed` (Migrasi & seeder awal)
+
+• `php artisan db:seed --class=NamaSeeder` (Jalankan seeder spesifik)
+
+• `php artisan make:filament-user` (Buat user admin baru)
+
+5. Pembersihan Cache (Jika stuck/error)
+
+• `php artisan optimize:clear`
+
+• `php artisan route:clear`
+
+• `php artisan config:clear`
+
+• `php artisan view:clear`
+
+• `composer dump-autoload`
