@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\MasterStockController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\TransactionController;
 use Illuminate\Support\Facades\Route;
@@ -13,3 +14,4 @@ Route::prefix('transaksi')->group(function () {
     Route::put('/{id}', [TransactionController::class, 'update']);
     Route::delete('/{id}', [TransactionController::class, 'destroy']);
 });
+Route::apiResource('master-stocks', MasterStockController::class);
