@@ -28,6 +28,8 @@ class MasterStocksTable
                     ->label('Price')
                     ->money('IDR')
                     ->sortable(),
+                Tables\Columns\TextColumn::make('stock')
+                    ->label('Jumlah Stock'),
                 Tables\Columns\TextColumn::make('userup')
                     ->label('Updated By'),
                 Tables\Columns\TextColumn::make('tglup')

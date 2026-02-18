@@ -30,64 +30,78 @@ class TransactionController extends Controller
     // POST
     public function store(Request $request)
     {
-        $data = $request->all();
+        try {
+            $validated = $request->validate([
+                'id_transaksi' => 'required|string',
+                'customerName' => 'required|string',
+                'alamat' => 'required|string',
+                'date' => 'required|date',
+                'total' => 'required|numeric',
+                'status' => 'required|string',
 
-        // Jika hanya 1 transaksi, bungkus jadi array
-        if (isset($data['id_transaksi'])) {
-            $data = [$data];
-        }
+                'items' => 'required|array|min:1',
+                'items.*.tyunit' => 'required|string|exists:munit,TYUNIT',
+                'items.*.price' => 'required|numeric',
+                'items.*.quantity' => 'required|integer|min:1',
+                'items.*.bonus' => 'required|integer|min:0',
+                'items.*.subtotal' => 'required|numeric|min:0',
+            ]);
 
-        $request->validate([
-            '*.id_transaksi' => 'required|string|distinct',
-            '*.customerName' => 'required|string',
-            '*.alamat' => 'required|string',
-            '*.date' => 'required|date',
-            '*.total' => 'required|numeric',
-            '*.status' => 'required|string',
-            '*.items' => 'required|array|min:1',
-            '*.items.*.tyunit' => 'required|string|exists:munit,TYUNIT',
-            '*.items.*.price' => 'required|numeric',
-            '*.items.*.quantity' => 'required|integer|min:1',
-            '*.items.*.bonus' => 'required|integer|min:0',
-            '*.items.*.subtotal' => 'required|numeric|min:0',
-        ]);
-
-        DB::transaction(function () use ($data) {
-
-            foreach ($data as $trxData) {
+            DB::transaction(function () use ($validated) {
 
                 $trx = Transaction::create([
-                    'id_transaksi'  => $trxData['id_transaksi'],
-                    'customer_name' => $trxData['customerName'],
-                    'alamat'        => $trxData['alamat'],
-                    'tanggal'       => $trxData['date'],
-                    'total'         => $trxData['total'],
-                    'status'        => $trxData['status'],
+                    'id_transaksi'  => $validated['id_transaksi'],
+                    'customer_name' => $validated['customerName'],
+                    'alamat'        => $validated['alamat'],
+                    'tanggal'       => $validated['date'],
+                    'total'         => $validated['total'],
+                    'status'        => $validated['status'],
                 ]);
 
-                foreach ($trxData['items'] as $item) {
+                foreach ($validated['items'] as $item) {
 
-                    // Ambil data barang dari master stock
-                    $barang = MasterStock::where('TYUNIT', $item['tyunit'])->firstOrFail();
+                    $barang = MasterStock::where('TYUNIT', $item['tyunit'])
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$barang) {
+                        throw new \Exception("Barang {$item['tyunit']} tidak ditemukan");
+                    }
+
+                    $totalKeluar = $item['quantity'] + $item['bonus'];
+
+                    if ($barang->stock < $totalKeluar) {
+                        throw new \Exception("Stock {$item['tyunit']} tidak mencukupi");
+                    }
+
+                    $barang->decrement('stock', $totalKeluar);
 
                     TransactionItem::create([
                         'id_transaksi' => $trx->id_transaksi,
                         'tyunit'       => $item['tyunit'],
-                        'nama_barang'  => $barang->NTYUNIT,   // ❗ tidak null
+                        'nama_barang'  => $barang->NTYUNIT,
                         'harga'        => $item['price'],
                         'quantity'     => $item['quantity'],
                         'bonus'        => $item['bonus'],
                         'subtotal'     => $item['subtotal'],
                     ]);
                 }
-            }
-        });
+            });
 
-        return response()->json(['message' => 'Semua transaksi berhasil disimpan'], 201);
+
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transaksi berhasil disimpan'
+            ], 201);
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
-
-
-
 
     // UPDATE
     public function update(Request $request, $id)

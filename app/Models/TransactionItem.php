@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TransactionItem extends Model
 {
     protected $table = 'transaksi_items';
+    protected $primaryKey = 'id'; // kalau ada kolom id
     public $timestamps = false;
 
     protected $fillable = [
@@ -20,12 +21,7 @@ class TransactionItem extends Model
         'subtotal',
     ];
 
-    public function barang()
-    {
-        return $this->belongsTo(MasterStock::class, 'TYUNIT', 'tyunit');
-    }
-
-    public function transaction(): BelongsTo
+    public function transaction()
     {
         return $this->belongsTo(Transaction::class, 'id_transaksi', 'id_transaksi');
     }

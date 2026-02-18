@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Transaction extends Model
 {
     protected $table = 'transaksi';
+    protected $primaryKey = 'id_transaksi';   // ✅ WAJIB
+    public $incrementing = false;             // ✅ karena bukan auto increment
+    protected $keyType = 'string';            // ✅ karena id_transaksi string
     public $timestamps = false;
 
     protected $fillable = [
@@ -22,9 +25,8 @@ class Transaction extends Model
     protected $casts = [
         'tanggal' => 'datetime',
     ];
-    
 
-    public function items(): HasMany
+    public function items()
     {
         return $this->hasMany(TransactionItem::class, 'id_transaksi', 'id_transaksi');
     }

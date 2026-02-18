@@ -26,6 +26,12 @@ class MasterStockForm
                     ->numeric()
                     ->label('Selling Price')
                     ->prefix('Rp'),
+                Forms\Components\TextInput::make('stock')
+                    ->numeric()
+                    ->required()
+                    ->default(0)
+                    ->label('Jumlah Stock')
+                    ->minValue(0),
                 Forms\Components\TextInput::make('cmodule')
                     ->maxLength(15)
                     ->default(''),

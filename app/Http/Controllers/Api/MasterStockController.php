@@ -27,10 +27,8 @@ class MasterStockController extends Controller
         $validated = $request->validate([
             'TYUNIT'  => 'required|string|unique:munit,TYUNIT',
             'NTYUNIT' => 'required|string',
-            'kdklp'   => 'nullable|string',
             'hjual'   => 'required|numeric',
-            'cmodule' => 'nullable|string',
-            'userup'  => 'nullable|string',
+            'stock'   => 'required|numeric',
             'tglup'   => 'nullable|date',
         ]);
 

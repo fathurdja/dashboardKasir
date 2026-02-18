@@ -16,6 +16,7 @@ class MasterStock extends Model
         'kdklp',
         'hjual',
         'cmodule',
+        'stock',
         'userup',
         'tglup'
     ];
