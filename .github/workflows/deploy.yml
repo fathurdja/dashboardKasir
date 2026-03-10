@@ -1,0 +1,42 @@
+name: Laravel Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd ${{ secrets.PROJECT_PATH }}
+
+            echo "Pull latest code"
+            git reset --hard HEAD
+            git clean -fd
+            git pull origin main --force
+
+            echo "Install composer dependencies"
+            composer install --no-dev --optimize-autoloader
+
+            echo "Run migrations"
+            php artisan migrate --force
+
+            echo "Cache config & routes"
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            echo "Restart queue (if used)"
+            php artisan queue:restart || true
+
+            echo "Deployment finished"
