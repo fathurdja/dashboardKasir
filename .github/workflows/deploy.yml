@@ -3,14 +3,25 @@ name: Laravel Deploy
 on:
   push:
     branches:
-      - main
+      - Master
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to VPS via SSH
+      - name: Install ZeroTier
+        run: |
+          curl -s https://install.zerotier.com | sudo bash
+
+      - name: Join ZeroTier Network
+        run: |
+          sudo zerotier-cli join ${{ secrets.ZT_NETWORK_ID }}
+
+      - name: Wait for network
+        run: sleep 20
+
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -25,18 +36,27 @@ jobs:
             git clean -fd
             git pull origin main --force
 
-            echo "Install composer dependencies"
+            echo "Install dependencies"
             composer install --no-dev --optimize-autoloader
+
+            echo "Setup env if not exists"
+            if [ ! -f .env ]; then
+              cp .env.example .env
+              php artisan key:generate
+            fi
 
             echo "Run migrations"
             php artisan migrate --force
 
-            echo "Cache config & routes"
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
+            echo "Publish Livewire assets"
+            php artisan livewire:publish --assets --force || true
 
-            echo "Restart queue (if used)"
+            echo "Optimize Laravel"
+            php artisan optimize:clear
+            php artisan optimize
+
+            echo "Fix permissions"
+            chmod -R 775 storage bootstrap/cache
+
+            echo "Restart queue"
             php artisan queue:restart || true
-
-            echo "Deployment finished"
