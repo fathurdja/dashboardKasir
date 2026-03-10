@@ -54,6 +54,7 @@ jobs:
             php artisan migrate --force
 
             echo "Publish Livewire assets"
+            php artisan filament:assets
             php artisan livewire:publish --assets --force || true
 
             echo "Optimize Laravel"
