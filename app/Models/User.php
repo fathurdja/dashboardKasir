@@ -6,7 +6,6 @@ namespace App\Models;
 
 use Filament\Models\Contracts\FilamentUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -21,14 +20,6 @@ class User extends Authenticatable implements FilamentUser
         return true; // Allow all users in the database for now to fix the 403 error.
     }
 
-    public function canAccessPanel(\Filament\Panel $panel): bool
-    {
-        // Example condition: allow all users
-        return true;
-
-        // Or restrict access:
-        // return str_ends_with($this->email, '@yourdomain.com');
-    }
     /**
      * The attributes that are mass assignable.
      *
