@@ -3,37 +3,62 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductVariant;
+use Illuminate\Support\Str;
 
 class ProductSeeder extends Seeder
 {
+    /**
+     * Run the database seeds.
+     */
     public function run(): void
     {
-        $products = [
-            ['name' => 'Kopi Hitam', 'price' => 15000, 'stock' => 20],
-            ['name' => 'Teh Manis', 'price' => 10000, 'stock' => 30],
-            ['name' => 'Air Mineral', 'price' => 5000, 'stock' => 50],
-            ['name' => 'Nasi Goreng', 'price' => 25000, 'stock' => 15],
-            ['name' => 'Mie Goreng', 'price' => 20000, 'stock' => 18],
-            ['name' => 'Ayam Geprek', 'price' => 22000, 'stock' => 25],
-            ['name' => 'Burger Mini', 'price' => 18000, 'stock' => 12],
-            ['name' => 'Kentang Goreng', 'price' => 15000, 'stock' => 20],
-            ['name' => 'Es Jeruk', 'price' => 12000, 'stock' => 30],
-            ['name' => 'Es Teh', 'price' => 8000, 'stock' => 40],
-            ['name' => 'Soda Gembira', 'price' => 17000, 'stock' => 10],
-            ['name' => 'Roti Bakar', 'price' => 16000, 'stock' => 14],
-            ['name' => 'Pisang Goreng', 'price' => 10000, 'stock' => 22],
-            ['name' => 'Sate Ayam', 'price' => 30000, 'stock' => 10],
-            ['name' => 'Soto Ayam', 'price' => 22000, 'stock' => 8],
-            ['name' => 'Bakso', 'price' => 20000, 'stock' => 15],
-            ['name' => 'Nugget', 'price' => 12000, 'stock' => 25],
-            ['name' => 'Susu Coklat', 'price' => 14000, 'stock' => 18],
-            ['name' => 'Lemon Tea', 'price' => 12000, 'stock' => 20],
-            ['name' => 'Teh Botol', 'price' => 6000, 'stock' => 50],
+        $categories = [
+            'Makanan' => ['Nasi Goreng Special', 'Mie Goreng Seafood', 'Ayam Bakar Madu', 'Sate Ayam Madura'],
+            'Minuman' => ['Es Teh Manis', 'Es Jeruk Peras', 'Kopi Susu Gula Aren', 'Thai Tea Bottle'],
+            'Snack' => ['Kentang Goreng', 'Cireng Rujak', 'Pisang Goreng Keju'],
         ];
 
-        foreach ($products as $item) {
-            Product::create($item);
+        foreach ($categories as $catName => $products) {
+            $category = Category::create([
+                'name' => $catName,
+                'slug' => Str::slug($catName),
+                'is_active' => true,
+            ]);
+
+            foreach ($products as $prodName) {
+                $purchasePrice = rand(5000, 20000);
+                $product = Product::create([
+                    'category_id' => $category->id,
+                    'name' => $prodName,
+                    'description' => 'Menu ' . $prodName . ' paling enak di kota ini.',
+                    'purchase_price' => $purchasePrice,
+                    'price' => $purchasePrice + rand(5000, 15000),
+                    'is_active' => true,
+                    'barcode' => rand(100000000, 999999999),
+                ]);
+
+                // Add variants for some products
+                if (Str::contains($prodName, 'Es') || Str::contains($prodName, 'Kopi')) {
+                    ProductVariant::create([
+                        'product_id' => $product->id,
+                        'name' => 'Ukuran Besar',
+                        'purchase_price' => 2000,
+                        'additional_price' => 5000,
+                        'sku' => 'VAR-' . rand(1000, 9999),
+                    ]);
+                    
+                    ProductVariant::create([
+                        'product_id' => $product->id,
+                        'name' => 'Ukuran Sedang',
+                        'purchase_price' => 0,
+                        'additional_price' => 0,
+                        'sku' => 'VAR-' . rand(1000, 9999),
+                    ]);
+                }
+            }
         }
     }
 }

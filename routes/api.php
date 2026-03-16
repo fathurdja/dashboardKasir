@@ -1,17 +1,15 @@
 <?php
 
-use App\Http\Controllers\Api\MasterStockController;
-use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\TransactionController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::apiResource('products', ProductController::class);
+// For Laravel Sanctum User Info Authentication retrieval
+Route::get('/user', function (Request $request) {
+    return $request->user();
+})->middleware('auth:sanctum');
 
-Route::prefix('transaksi')->group(function () {
-    Route::get('/', [TransactionController::class, 'index']);
-    Route::get('/{id}', [TransactionController::class, 'show']);
-    Route::post('/', [TransactionController::class, 'store']);
-    Route::put('/{id}', [TransactionController::class, 'update']);
-    Route::delete('/{id}', [TransactionController::class, 'destroy']);
+// POS Mobile App Sync Endpoint
+// Protected with Sanctum middleware. App should send Bearer Token.
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/sync/orders', [\App\Http\Controllers\Api\SyncController::class, 'syncOrders']);
 });
-Route::apiResource('master-stocks', MasterStockController::class);

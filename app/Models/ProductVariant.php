@@ -8,19 +8,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Product extends Model
+class ProductVariant extends Model
 {
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'category_id',
+        'product_id',
+        'sku',
         'name',
-        'description',
-        'barcode',
         'purchase_price',
-        'price',
-        'is_active',
-        'image',
+        'additional_price',
     ];
 
     /**
@@ -32,31 +29,17 @@ class Product extends Model
     {
         return [
             'purchase_price' => 'decimal:2',
-            'price' => 'decimal:2',
-            'is_active' => 'boolean',
+            'additional_price' => 'decimal:2',
         ];
     }
 
-    public function category(): BelongsTo
+    public function product(): BelongsTo
     {
-        return $this->belongsTo(Category::class);
-    }
-
-    public function variants(): HasMany
-    {
-        return $this->hasMany(ProductVariant::class);
+        return $this->belongsTo(Product::class);
     }
 
     public function stockTransactions(): HasMany
     {
         return $this->hasMany(StockTransaction::class);
-    }
-
-    public function getCurrentStock(): int
-    {
-        $in = $this->stockTransactions()->where('type', 'in')->sum('quantity');
-        $out = $this->stockTransactions()->where('type', 'out')->sum('quantity');
-        
-        return $in - $out;
     }
 }
