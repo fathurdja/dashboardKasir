@@ -1,0 +1,68 @@
+name: Laravel Deploy
+
+on:
+  push:
+    branches:
+      - Master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install ZeroTier
+        run: |
+          curl -s https://install.zerotier.com | sudo bash
+
+      - name: Join ZeroTier Network
+        run: |
+          sudo zerotier-cli join ${{ secrets.ZT_NETWORK_ID }}
+
+      - name: Wait for network
+        run: sleep 20
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd ${{ secrets.PROJECT_PATH }}
+            
+            echo "Pull latest code"
+            git reset --hard HEAD
+            git clean -fd
+            git pull origin Master --force
+
+            chown -R www:www .
+            chmod -R 775 storage
+            chmod -R 775 bootstrap/cache
+
+
+            echo "Install dependencies"
+            composer install --no-dev --optimize-autoloader
+
+            echo "Setup env if not exists"
+            if [ ! -f .env ]; then
+              cp .env.example .env
+              php artisan key:generate
+            fi
+
+            echo "Run migrations"
+            php artisan migrate --force
+
+            echo "Publish Livewire assets"
+            php artisan filament:assets
+            php artisan livewire:publish --assets --force || true
+
+            echo "Optimize Laravel"
+            php artisan optimize:clear
+            php artisan optimize
+
+            echo "Fix permissions"
+            chmod -R 775 storage bootstrap/cache
+
+            echo "Restart queue"
+            php artisan queue:restart || true
