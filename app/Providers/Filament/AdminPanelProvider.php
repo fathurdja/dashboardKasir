@@ -28,14 +28,19 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->font('Figtree')
+            ->brandName('Kasir POS')
+            ->sidebarCollapsibleOnDesktop()
             ->colors([
-                'primary' => Color::Amber,
-                'success' => Color::Emerald,
-                'warning' => Color::Orange, // atau Yellow
+                'primary' => Color::hex('#313647'),
+                'gray'    => Color::hex('#435663'),
+                'success' => Color::hex('#A3B087'),
+                'warning' => Color::hex('#FFF8D4'),
                 'danger'  => Color::Rose,
-                'info'    => Color::Sky,
+                'info'    => Color::hex('#435663'),
             ])
-            ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')
+            ->viteTheme('resources/css/filament/admin/theme.css')
+            ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\Filament\Admin\Pages')
             ->pages([
                 Dashboard::class,

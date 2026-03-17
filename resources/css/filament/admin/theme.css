@@ -1,0 +1,232 @@
+@import 'tailwindcss';
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*.php';
+@source '../../../../resources/views/filament/**/*.blade.php';
+
+/*
+ * Dashboard Kasir POS — Custom Filament Theme
+ * Palette: #313647, #435663, #A3B087, #FFF8D4
+ * Font: Figtree (loaded via Filament ->font())
+ */
+
+@theme {
+    --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* ============================================
+   SIDEBAR OVERRIDES
+   ============================================ */
+
+/* Sidebar background — Dark Navy */
+.fi-sidebar {
+    background: linear-gradient(180deg, #313647 0%, #2a2e3d 100%) !important;
+    border-right: 1px solid rgba(163, 176, 135, 0.15) !important;
+}
+
+/* Sidebar nav items */
+.fi-sidebar-nav-groups {
+    --c-50: 255 248 212;   /* cream */
+    --c-200: 163 176 135;  /* sage */
+    --c-400: 163 176 135;
+    --c-600: 255 248 212;
+    --c-700: 255 248 212;
+}
+
+.fi-sidebar-item a,
+.fi-sidebar-item button {
+    color: rgba(255, 248, 212, 0.75) !important;
+    transition: all 0.2s ease !important;
+}
+
+.fi-sidebar-item a:hover,
+.fi-sidebar-item button:hover {
+    color: #FFF8D4 !important;
+    background: rgba(163, 176, 135, 0.12) !important;
+}
+
+/* Active sidebar item */
+.fi-sidebar-item-active a,
+.fi-sidebar-item-active button {
+    color: #FFF8D4 !important;
+    background: rgba(163, 176, 135, 0.2) !important;
+    border-left: 3px solid #A3B087 !important;
+}
+
+.fi-sidebar-item-active .fi-sidebar-item-icon {
+    color: #A3B087 !important;
+}
+
+/* Sidebar group labels */
+.fi-sidebar-group-label {
+    color: rgba(163, 176, 135, 0.6) !important;
+    font-size: 0.65rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+
+/* Sidebar brand/header */
+.fi-sidebar-header {
+    border-bottom: 1px solid rgba(163, 176, 135, 0.15) !important;
+}
+
+.fi-sidebar-header a,
+.fi-logo {
+    color: #A3B087 !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* ============================================
+   TOPBAR OVERRIDES
+   ============================================ */
+.fi-topbar {
+    background: #fff !important;
+    border-bottom: 2px solid rgba(49, 54, 71, 0.08) !important;
+    box-shadow: 0 1px 4px rgba(49, 54, 71, 0.05) !important;
+}
+
+/* ============================================
+   STATS WIDGET CARDS
+   ============================================ */
+.fi-wi-stats-overview-stat {
+    border: 1px solid rgba(67, 86, 99, 0.12) !important;
+    border-radius: 14px !important;
+    transition: all 0.25s ease !important;
+    box-shadow: 0 2px 8px rgba(49, 54, 71, 0.06) !important;
+}
+
+.fi-wi-stats-overview-stat:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 24px rgba(49, 54, 71, 0.12) !important;
+    border-color: #A3B087 !important;
+}
+
+/* ============================================
+   WIDGET CONTAINERS
+   ============================================ */
+.fi-wi {
+    border-radius: 16px !important;
+    overflow: hidden !important;
+}
+
+/* Table widgets styling */
+.fi-ta {
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(67, 86, 99, 0.1) !important;
+}
+
+.fi-ta-header-cell {
+    background: rgba(49, 54, 71, 0.04) !important;
+    font-weight: 700 !important;
+    color: #313647 !important;
+    text-transform: uppercase !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.04em !important;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.fi-btn-primary {
+    background: linear-gradient(135deg, #313647 0%, #435663 100%) !important;
+    box-shadow: 0 4px 12px rgba(49, 54, 71, 0.25) !important;
+    transition: all 0.2s ease !important;
+}
+
+.fi-btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(49, 54, 71, 0.35) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ============================================
+   CARDS & SECTIONS
+   ============================================ */
+.fi-section {
+    border-radius: 16px !important;
+    border: 1px solid rgba(67, 86, 99, 0.08) !important;
+    box-shadow: 0 1px 4px rgba(49, 54, 71, 0.04) !important;
+}
+
+/* ============================================
+   LOGIN PAGE
+   ============================================ */
+.fi-simple-layout {
+    background: linear-gradient(135deg, #313647 0%, #435663 50%, #3d4a56 100%) !important;
+}
+
+.fi-simple-main-ctn {
+    border: 1px solid rgba(163, 176, 135, 0.2) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* ============================================
+   CHART WIDGET STYLING
+   ============================================ */
+.fi-wi-chart {
+    border: 1px solid rgba(67, 86, 99, 0.1) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 8px rgba(49, 54, 71, 0.06) !important;
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+.fi-badge {
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+}
+
+/* ============================================
+   GLOBAL ENHANCEMENTS
+   ============================================ */
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(67, 86, 99, 0.25);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(67, 86, 99, 0.4);
+}
+
+/* Selection color */
+::selection {
+    background: rgba(163, 176, 135, 0.3);
+    color: #313647;
+}
+
+/* Focus ring override */
+*:focus-visible {
+    outline-color: #A3B087 !important;
+}
+
+/* Page heading */
+.fi-header-heading {
+    color: #313647 !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Breadcrumbs */
+.fi-breadcrumbs li {
+    color: #435663 !important;
+}
+
+/* Pagination hover */
+.fi-pagination-item:hover {
+    background: rgba(163, 176, 135, 0.15) !important;
+}
