@@ -20,6 +20,9 @@ class Order extends Model
         'tax_amount',
         'discount_amount',
         'payment_method',
+        'xendit_external_id',
+        'xendit_invoice_url',
+        'xendit_status',
     ];
 
     protected $casts = [

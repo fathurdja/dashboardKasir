@@ -13,3 +13,5 @@ Route::get('/user', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/sync/orders', [\App\Http\Controllers\Api\SyncController::class, 'syncOrders']);
 });
+
+Route::post('/xendit/webhook', [\App\Http\Controllers\Api\XenditWebhookController::class, 'handle']);

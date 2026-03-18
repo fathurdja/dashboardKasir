@@ -50,7 +50,12 @@ Proyek ini menggunakan desain modern dengan palet warna yang dikurasi untuk keny
 
 4. **Invoicing & Pelaporan:**
    - Generasi nomor nota otomatis.
-   - Cetak struk langsung ke PDF.
+    - Cetak struk langsung ke PDF.
+
+5. **Payment Gateway (Xendit):**
+   - Integrasi dengan Xendit untuk pembayaran non-tunai (QRIS, VA, E-Wallet, dll).
+   - Generasi Invoice Xendit otomatis saat pesanan dibuat dengan metode pembayaran 'Xendit'.
+   - Sinkronisasi status pembayaran via Webhook (Callback).
 
 ---
 
@@ -59,6 +64,7 @@ Proyek ini menggunakan desain modern dengan palet warna yang dikurasi untuk keny
 - **Primary Key:** Proyek ini menggunakan **UUID** untuk keamanan dan skalabilitas.
 - **Soft Deletes:** Data tidak dihapus secara permanen, memungkinkan pemulihan jika diperlukan.
 - **Stock Logic:** Stok tidak disimpan sebagai kolom statis di tabel produk, melainkan dihitung secara real-time dari tabel `stock_transactions` untuk menjamin integritas data.
+- **Payment Data:** Data transaksi Xendit disimpan di tabel `orders` (ID Eksternal, URL Invoice, dan Status Pembayaran).
 
 ---
 
@@ -72,6 +78,11 @@ Ikuti langkah-langkah berikut untuk menjalankan proyek di Laragon:
 2. **Konfigurasi Environment:**
    - Salin `.env.example` menjadi `.env`.
    - Sesuaikan konfigurasi database di `.env` (Laragon secara default menggunakan `DB_USERNAME=root` dan `DB_PASSWORD=`).
+   - Tambahkan API Key Xendit di `.env`:
+     ```env
+     XENDIT_SECRET_KEY=xnd_development_...
+     XENDIT_PUBLIC_KEY=xnd_public_development_...
+     ```
 
 3. **Install Dependencies:**
    Buka terminal di folder proyek dan jalankan:
@@ -86,9 +97,9 @@ Ikuti langkah-langkah berikut untuk menjalankan proyek di Laragon:
    ```
 
 5. **Akses Dashboard:**
-   - Jalankan `npm run dev` atau `npm run build` untuk mengompilasi aset frontend (Membutuhkan Node.js ≥ 20.19).
+   - Jalankan `npm run dev` or `npm run build` untuk mengompilasi aset frontend (Membutuhkan Node.js ≥ 20.19).
    - Akses via browser (contoh: `http://dashboardKasir.test/admin`).
 
 ---
 
-*Catatan: Dokumen ini dibuat secara otomatis sebagai hasil analisis proyek. Silakan perbarui seiring perkembangan fitur baru.*
+*Catatan: Dokumen ini diperbarui untuk mencakup integrasi Payment Gateway Xendit.*

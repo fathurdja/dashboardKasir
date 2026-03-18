@@ -21,6 +21,33 @@ class CreateOrder extends CreateRecord
     {
         $order = $this->record;
 
+        if ($order->payment_method === 'Xendit') {
+            $xenditService = new \App\Services\XenditService();
+            $invoice = $xenditService->createInvoice($order);
+            
+            if (isset($invoice['invoice_url'])) {
+                $order->update([
+                    'xendit_external_id' => $invoice['external_id'],
+                    'xendit_invoice_url' => $invoice['invoice_url'],
+                    'xendit_status' => $invoice['status'],
+                ]);
+                
+                Notification::make()
+                    ->success()
+                    ->title('Pesanan Dibuat')
+                    ->body('Mengarahkan ke halaman pembayaran...')
+                    ->send();
+                    
+                return;
+            } else {
+                Notification::make()
+                    ->danger()
+                    ->title('Gagal Membuat Invoice Xendit')
+                    ->body('Terjadi kesalahan saat terhubung ke payment gateway.')
+                    ->send();
+            }
+        }
+        
         if ($order->status === 'completed') {
             foreach ($order->items as $item) {
                 StockTransaction::create([
@@ -113,6 +140,12 @@ class CreateOrder extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
+        $order = $this->record;
+
+        if ($order && $order->xendit_invoice_url) {
+            return $order->xendit_invoice_url;
+        }
+
         return $this->getResource()::getUrl('index');
     }
 }

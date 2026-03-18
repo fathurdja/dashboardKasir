@@ -68,11 +68,21 @@ class OrderForm
                                                 'canceled' => 'Canceled',
                                             ])
                                             ->required()
-                                            ->default('pending'),
+                                            ->default(fn (Get $get) => $get('payment_method') === 'Xendit' ? 'pending' : 'completed')
+                                            ->disabled(fn (Get $get) => $get('payment_method') === 'Xendit')
+                                            ->dehydrated(),
                                         
-                                        TextInput::make('payment_method')
+                                        Select::make('payment_method')
                                             ->label('Pembayaran')
-                                            ->placeholder('Cash/QRIS'),
+                                            ->options([
+                                                'Cash' => 'Cash',
+                                                'QRIS' => 'QRIS',
+                                                'Transfer' => 'Transfer',
+                                                'Xendit' => 'Xendit Gateway',
+                                            ])
+                                            ->required()
+                                            ->default('Cash')
+                                            ->live(),
                                     ]),
                             ]),
 
