@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\V1\StockReportController;
 // Auth routes (public)
 Route::prefix('v1/auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/register', [AuthController::class, 'register']);
 });
 
 // Xendit webhook v1 (public, no auth)

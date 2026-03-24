@@ -14,6 +14,62 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     /**
+     * Register a new user and issue Sanctum token.
+     */
+    public function register(Request $request): JsonResponse
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:6',
+            'role' => 'nullable|string|in:admin,kasir,delivery',
+            'device_name' => 'required|string',
+            'platform' => 'nullable|string|in:android,ios,web',
+        ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'role' => $request->input('role', 'kasir'),
+        ]);
+
+        $device = Device::create([
+            'user_id' => $user->id,
+            'device_name' => $request->device_name,
+            'platform' => $request->input('platform', 'android'),
+            'is_active' => true,
+        ]);
+
+        $token = $user->createToken($request->device_name)->plainTextToken;
+
+        $store = StoreSettings::current();
+
+        return response()->json([
+            'message' => 'User registered successfully',
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'device' => [
+                'id' => $device->id,
+                'device_name' => $device->device_name,
+                'platform' => $device->platform,
+            ],
+            'store' => $store ? [
+                'name' => $store->name,
+                'address' => $store->address,
+                'phone' => $store->phone,
+                'tax_rate' => (float) $store->tax_rate,
+                'currency' => $store->currency,
+                'store_code' => $store->store_code,
+            ] : null,
+        ], 201);
+    }
+    /**
      * Login kasir and issue Sanctum token.
      */
     public function login(Request $request): JsonResponse
