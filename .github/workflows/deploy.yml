@@ -31,14 +31,16 @@ jobs:
           script: |
             cd ${{ secrets.PROJECT_PATH }}
             
+            git config --global --add safe.directory '*'
+
             echo "Pull latest code"
             git reset --hard HEAD
             git clean -fd
             git pull origin Master --force
 
-            chown -R www:www .
-            chmod -R 775 storage
-            chmod -R 775 bootstrap/cache
+            sudo chown -R www:www . || chown -R www:www . || true
+            sudo chmod -R 775 storage || chmod -R 775 storage || true
+            sudo chmod -R 775 bootstrap/cache || chmod -R 775 bootstrap/cache || true
 
 
             echo "Install dependencies"
@@ -62,7 +64,7 @@ jobs:
             php artisan optimize
 
             echo "Fix permissions"
-            chmod -R 775 storage bootstrap/cache
+            sudo chmod -R 775 storage bootstrap/cache || chmod -R 775 storage bootstrap/cache || true
 
             echo "Restart queue"
             php artisan queue:restart || true
