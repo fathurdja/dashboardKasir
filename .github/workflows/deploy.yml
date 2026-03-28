@@ -10,6 +10,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install and Build NPM
+        run: |
+          npm install
+          npm run build
+
       - name: Install ZeroTier
         run: |
           curl -s https://install.zerotier.com | sudo bash
@@ -38,13 +51,16 @@ jobs:
             git clean -fd
             git pull origin Master --force
 
+            echo "Remove old Vite build files"
+            rm -rf public/build || true
+
             sudo chown -R www:www . || chown -R www:www . || true
             sudo chmod -R 775 storage || chmod -R 775 storage || true
             sudo chmod -R 775 bootstrap/cache || chmod -R 775 bootstrap/cache || true
 
 
             echo "Install dependencies"
-            composer install --no-dev --optimize-autoloader
+            composer install --no-dev --optimize-autoloader --classmap-authoritative
 
             echo "Setup env if not exists"
             if [ ! -f .env ]; then
@@ -62,9 +78,20 @@ jobs:
             echo "Optimize Laravel"
             php artisan optimize:clear
             php artisan optimize
+            php artisan event:cache
 
             echo "Fix permissions"
             sudo chmod -R 775 storage bootstrap/cache || chmod -R 775 storage bootstrap/cache || true
 
             echo "Restart queue"
             php artisan queue:restart || true
+
+      - name: Upload Vite build to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "public/build"
+          target: ${{ secrets.PROJECT_PATH }}
