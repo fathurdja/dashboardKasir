@@ -43,6 +43,10 @@ class OrdersTable
                     ->sortable(),
                 TextColumn::make('payment_method')
                     ->searchable(),
+                TextColumn::make('delivery_status')
+                    ->label('Status Kirim')
+                    ->badge()
+                    ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable(),

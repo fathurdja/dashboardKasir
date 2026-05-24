@@ -77,6 +77,7 @@ class TransactionController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'id' => 'nullable|uuid',
             'receipt_number' => 'nullable|string|unique:orders,receipt_number',
             'order_type' => 'required|in:dine-in,take-away',
             'payment_method' => 'required|string|in:cash,qris,bon',
@@ -96,6 +97,16 @@ class TransactionController extends Controller
             'due_date' => 'nullable|date',
             'notes' => 'nullable|string',
         ]);
+
+        if (!empty($validated['id'])) {
+            $existingOrder = Order::with('items.product')->find($validated['id']);
+            if ($existingOrder) {
+                return response()->json([
+                    'message' => 'Transaction already exists (Idempotent)',
+                    'data' => new TransactionApiResource($existingOrder),
+                ], 200);
+            }
+        }
 
         try {
             DB::beginTransaction();
@@ -118,6 +129,7 @@ class TransactionController extends Controller
             }
 
             $order = Order::create([
+                'id' => $validated['id'] ?? (string) Str::uuid(),
                 'receipt_number' => $validated['receipt_number'],
                 'status' => $status,
                 'order_type' => $validated['order_type'],

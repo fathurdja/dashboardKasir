@@ -15,7 +15,27 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Create Admin User
+        User::firstOrCreate(
+            ['email' => 'admin@admin.com'],
+            [
+                'name' => 'Administrator',
+                'password' => bcrypt('password'),
+                'role' => 'admin',
+            ]
+        );
+
+        // Create Default Store Settings
+        \App\Models\StoreSettings::firstOrCreate(
+            ['id' => 1],
+            [
+                'name' => 'Toko Kasir AI',
+                'address' => 'Jl. Contoh Alamat No 123',
+                'phone' => '081234567890',
+                'tax_rate' => 11.00,
+                'store_code' => 'TKA-001',
+            ]
+        );
 
         $this->call([
             ProductSeeder::class,

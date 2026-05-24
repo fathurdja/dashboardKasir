@@ -32,12 +32,12 @@ class AdminPanelProvider extends PanelProvider
             ->brandName('Kasir POS')
             ->sidebarCollapsibleOnDesktop()
             ->colors([
-                'primary' => Color::hex('#313647'),
-                'gray'    => Color::hex('#435663'),
-                'success' => Color::hex('#A3B087'),
-                'warning' => Color::hex('#FFF8D4'),
+                'primary' => Color::hex('#8BAE66'),
+                'gray'    => Color::Slate,
+                'success' => Color::hex('#628141'),
+                'warning' => Color::hex('#EBD5AB'),
                 'danger'  => Color::Rose,
-                'info'    => Color::hex('#435663'),
+                'info'    => Color::Sky,
             ])
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
@@ -48,6 +48,8 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')
             ->widgets([
                 AccountWidget::class,
+                \App\Filament\Admin\Resources\Orders\Widgets\StatsOverview::class,
+                \App\Filament\Admin\Resources\Orders\Widgets\SalesChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,

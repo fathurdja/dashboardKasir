@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\V1\AnalyticsController;
 use App\Http\Controllers\Api\V1\QrisPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryController;
 use App\Http\Controllers\Api\V1\StockReportController;
+use App\Http\Controllers\Api\V1\AiController;
 
 // Auth routes (public)
 Route::prefix('v1/auth')->group(function () {
@@ -84,4 +85,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // Stock Report
     Route::get('/stock-report/daily', [StockReportController::class, 'daily']);
+
+    // AI-STICH Placeholder
+    Route::get('/ai/forecast', [AiController::class, 'forecast']);
 });
