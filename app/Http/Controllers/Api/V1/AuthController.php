@@ -20,7 +20,7 @@ class AuthController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'username' => 'required|string|max:255|unique:users',
             'password' => 'required|string|min:6',
             'role' => 'nullable|string|in:admin,kasir,delivery',
             'device_name' => 'required|string',
@@ -29,7 +29,7 @@ class AuthController extends Controller
 
         $user = User::create([
             'name' => $request->name,
-            'email' => $request->email,
+            'username' => $request->username,
             'password' => Hash::make($request->password),
             'role' => $request->input('role', 'kasir'),
         ]);
@@ -51,7 +51,7 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
-                'email' => $user->email,
+                'username' => $user->username,
                 'role' => $user->role,
             ],
             'device' => [
@@ -75,16 +75,16 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => 'required|email',
+            'username' => 'required|string',
             'password' => 'required|string',
             'device_name' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('username', $request->username)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'username' => ['The provided credentials are incorrect.'],
             ]);
         }
 
@@ -106,7 +106,7 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
-                'email' => $user->email,
+                'username' => $user->username,
                 'role' => $user->role ?? 'kasir',
             ],
             'device' => [
@@ -147,7 +147,7 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
-                'email' => $user->email,
+                'username' => $user->username,
                 'role' => $user->role ?? 'kasir',
             ],
             'store' => $store ? [
