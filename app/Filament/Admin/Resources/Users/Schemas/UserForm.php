@@ -14,11 +14,9 @@ class UserForm
             ->components([
                 TextInput::make('name')
                     ->required(),
-                TextInput::make('email')
-                    ->label('Email address')
-                    ->email()
+                TextInput::make('username')
+                    ->label('Username')
                     ->required(),
-                DateTimePicker::make('email_verified_at'),
                 TextInput::make('password')
                     ->password()
                     ->required(),

@@ -27,7 +27,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(\App\Filament\Auth\Login::class)
             ->font('Figtree')
             ->brandName('Kasir POS')
             ->sidebarCollapsibleOnDesktop()
