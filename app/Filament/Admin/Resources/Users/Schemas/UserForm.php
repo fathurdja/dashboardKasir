@@ -16,7 +16,8 @@ class UserForm
                     ->required(),
                 TextInput::make('username')
                     ->label('Username')
-                    ->required(),
+                    ->required()
+                    ->unique(ignoreRecord: true),
                 TextInput::make('password')
                     ->password()
                     ->required(),
