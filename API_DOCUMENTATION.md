@@ -1,12 +1,21 @@
 # Dashboard Kasir POS - API Documentation
 
-Base URL: `/api/v1`
+Base URL: `https://filament.fathurrzqn8n.web.id/api/v1`
 Authentication: Bearer Token (Sanctum) - sertakan di header `Authorization: Bearer <token>` untuk semua endpoint yang dilindungi.
 
 ---
 
 ## 1. Authentication
 Endpoint untuk otentikasi aplikasi mobile (kasir & kurir).
+
+### Roles yang Tersedia
+| Role | Deskripsi |
+|------|-----------|
+| `admin` | Administrator, akses penuh ke dashboard Filament dan semua fitur |
+| `kasir` | Kasir, akses ke fitur POS, transaksi, dan laporan |
+| `delivery` | Kurir, akses ke fitur delivery (shift, pengiriman, performa) |
+
+> **Default**: Jika `role` tidak dikirim saat register, maka otomatis diset ke `kasir`.
 
 ### Login
 `POST /auth/login`
@@ -27,7 +36,7 @@ Endpoint untuk otentikasi aplikasi mobile (kasir & kurir).
           "id": 1,
           "name": "Fathur",
           "username": "fathur",
-          "role": "kasir"
+          "role": "kasir" // "admin" | "kasir" | "delivery"
       },
       "device": {
           "id": 1,
@@ -58,6 +67,7 @@ Endpoint untuk otentikasi aplikasi mobile (kasir & kurir).
       "platform": "android"
   }
   ```
+  > **Catatan field `role`**: Opsional. Nilai yang valid: `admin`, `kasir`, `delivery`. Jika tidak diisi, default = `kasir`.
 - **Response** (`201 Created`): Mirip dengan response Login.
 
 ### Get Current User Profile (Me)

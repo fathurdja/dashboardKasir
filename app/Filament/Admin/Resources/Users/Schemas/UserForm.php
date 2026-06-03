@@ -2,7 +2,7 @@
 
 namespace App\Filament\Admin\Resources\Users\Schemas;
 
-use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 
@@ -20,7 +20,16 @@ class UserForm
                     ->unique(ignoreRecord: true),
                 TextInput::make('password')
                     ->password()
-                    ->required(),
+                    ->required(fn (string $operation): bool => $operation === 'create')
+                    ->dehydrated(fn (?string $state) => filled($state)),
+                Select::make('role')
+                    ->options([
+                        'admin' => 'Admin',
+                        'kasir' => 'Kasir',
+                        'delivery' => 'Delivery',
+                    ])
+                    ->required()
+                    ->default('kasir'),
             ]);
     }
 }
