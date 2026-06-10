@@ -70,6 +70,32 @@ Endpoint untuk otentikasi aplikasi mobile (kasir & kurir).
   > **Catatan field `role`**: Opsional. Nilai yang valid: `admin`, `kasir`, `delivery`. Jika tidak diisi, default = `kasir`.
 - **Response** (`201 Created`): Mirip dengan response Login.
 
+### Verify Token
+`GET /auth/verify`
+- **Body**: (Empty)
+- **Header**: `Authorization: Bearer <token>`
+- **Response** (`200 OK` - Valid):
+  ```json
+  {
+      "authenticated": true,
+      "message": "Token is valid",
+      "token": "1|xyz...",
+      "user": {
+          "id": 1,
+          "name": "Budi Kasir",
+          "username": "budikasir",
+          "role": "kasir"
+      }
+  }
+  ```
+- **Response** (`401 Unauthorized` - Expired/Invalid):
+  ```json
+  {
+      "authenticated": false,
+      "message": "Token is invalid or expired"
+  }
+  ```
+
 ### Get Current User Profile (Me)
 `GET /auth/me`
 - **Body**: (Empty)

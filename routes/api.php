@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\V1\AiController;
 Route::prefix('v1/auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/register', [AuthController::class, 'register']);
+    Route::get('/verify', [AuthController::class, 'verifyToken']);
 });
 
 // Xendit webhook v1 (public, no auth)
@@ -45,6 +46,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::get('/auth/check', [AuthController::class, 'checkToken']);
     Route::post('/auth/register-device', [AuthController::class, 'registerDevice']);
 
     // Products

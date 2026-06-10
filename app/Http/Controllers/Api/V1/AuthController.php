@@ -136,6 +136,36 @@ class AuthController extends Controller
     }
 
     /**
+     * Verify if the provided Bearer token is valid without throwing 401 via middleware.
+     */
+    public function verifyToken(Request $request): JsonResponse
+    {
+        if (auth('sanctum')->check()) {
+            $user = auth('sanctum')->user();
+            
+            // Optionally, return the current token if needed, or just status
+            $token = $request->bearerToken();
+
+            return response()->json([
+                'authenticated' => true,
+                'message' => 'Token is valid',
+                'token' => $token,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'username' => $user->username,
+                    'role' => $user->role ?? 'kasir',
+                ]
+            ], 200);
+        }
+
+        return response()->json([
+            'authenticated' => false,
+            'message' => 'Token is invalid or expired',
+        ], 401);
+    }
+
+    /**
      * Get authenticated user info + store settings.
      */
     public function me(Request $request): JsonResponse
@@ -159,6 +189,37 @@ class AuthController extends Controller
                 'store_code' => $store->store_code,
             ] : null,
         ]);
+    }
+
+    /**
+     * Check if token is valid and return a fresh token (refresh mechanism).
+     */
+    public function checkToken(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        
+        // Sanctum tokens don't expire by default unless configured.
+        // But to implement a refresh mechanism, we can issue a new token
+        // and revoke the current one.
+        $currentAccessToken = $user->currentAccessToken();
+        $deviceName = $currentAccessToken->name ?? 'mobile_device';
+        
+        // Revoke the current token
+        $currentAccessToken->delete();
+        
+        // Issue a new token
+        $newToken = $user->createToken($deviceName)->plainTextToken;
+
+        return response()->json([
+            'message' => 'Token refreshed successfully',
+            'token' => $newToken,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'role' => $user->role ?? 'kasir',
+            ]
+        ], 200);
     }
 
     /**
