@@ -176,7 +176,7 @@ class SyncController extends Controller
         if ($since) {
             $ordersQuery->where('updated_at', '>=', $since);
         }
-        $orders = $ordersQuery->limit(500)->get();
+        $orders = $ordersQuery->get();
 
         // Update device sync timestamp
         if ($request->input('device_id')) {
