@@ -256,7 +256,6 @@ Endpoint untuk sinkronisasi batch transaksi yang terjadi secara offline.
 - **Body**:
   ```json
   {
-      "device_id": 1,
       "orders": [
           {
               "id": "uuid-pesanan-1",
@@ -295,7 +294,7 @@ Endpoint untuk sinkronisasi batch transaksi yang terjadi secara offline.
 
 ### Download Data Server (Server -> Mobile)
 `GET /sync/download`
-- **Query Params**: `since` (ISO Datetime), `device_id`
+- **Query Params**: (Kosong/Tidak ada parameter. Menarik seluruh data transaksi dan produk)
 - **Response** (`200 OK`):
   ```json
   {

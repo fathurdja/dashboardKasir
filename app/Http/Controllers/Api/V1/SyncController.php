@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductApiResource;
 use App\Http\Resources\TransactionApiResource;
 use App\Models\Device;
 use App\Models\Order;
@@ -192,7 +193,7 @@ class SyncController extends Controller
         }
 
         return response()->json([
-            'products' => $products,
+            'products' => ProductApiResource::collection($products),
             'orders' => TransactionApiResource::collection($orders),
             'server_time' => now()->toIso8601String(),
         ]);

@@ -234,12 +234,8 @@ components:
     SyncUploadRequest:
       type: object
       required:
-        - device_id
         - orders
       properties:
-        device_id:
-          type: integer
-          example: 1
         orders:
           type: array
           items:
@@ -966,21 +962,9 @@ paths:
       summary: Download Data Server
       description: |
         Download data terbaru dari server ke mobile (Server → Mobile).
-        Menggunakan parameter `since` untuk sinkronisasi inkremental.
+        Menarik seluruh data dari awal hingga akhir tanpa batasan waktu (sinkronisasi penuh).
       security:
         - BearerAuth: []
-      parameters:
-        - name: since
-          in: query
-          schema:
-            type: string
-            format: date-time
-          description: Hanya data yang diupdate setelah waktu ini (ISO 8601)
-        - name: device_id
-          in: query
-          schema:
-            type: integer
-          description: ID device yang meminta data
       responses:
         '200':
           description: Data terbaru dari server
