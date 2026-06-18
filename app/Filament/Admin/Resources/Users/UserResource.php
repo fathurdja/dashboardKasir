@@ -20,7 +20,7 @@ class UserResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
-    protected static ?string $navigationGroup = 'Pengaturan';
+    protected static \UnitEnum|string|null $navigationGroup = 'Pengaturan';
 
     protected static ?int $navigationSort = 1;
 
@@ -52,3 +52,4 @@ class UserResource extends Resource
         ];
     }
 }
+

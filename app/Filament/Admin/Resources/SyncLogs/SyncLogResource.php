@@ -20,7 +20,7 @@ class SyncLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPath;
 
-    protected static ?string $navigationGroup = 'Pengaturan';
+    protected static \UnitEnum|string|null $navigationGroup = 'Pengaturan';
 
     protected static ?int $navigationSort = 3;
 
@@ -50,3 +50,4 @@ class SyncLogResource extends Resource
         ];
     }
 }
+

@@ -26,7 +26,7 @@ class OrderResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingCart;
 
-    protected static ?string $navigationGroup = 'Transaksi';
+    protected static \UnitEnum|string|null $navigationGroup = 'Transaksi';
 
     protected static ?int $navigationSort = 1;
 
@@ -71,3 +71,4 @@ class OrderResource extends Resource
             ]);
     }
 }
+

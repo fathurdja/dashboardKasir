@@ -23,7 +23,7 @@ class ProductResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
 
-    protected static ?string $navigationGroup = 'Master Data';
+    protected static \UnitEnum|string|null $navigationGroup = 'Master Data';
 
     protected static ?int $navigationSort = 1;
 
@@ -73,3 +73,4 @@ class ProductResource extends Resource
             ]);
     }
 }
+

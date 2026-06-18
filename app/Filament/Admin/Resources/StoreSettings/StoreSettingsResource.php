@@ -20,7 +20,7 @@ class StoreSettingsResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCog6Tooth;
 
-    protected static ?string $navigationGroup = 'Pengaturan';
+    protected static \UnitEnum|string|null $navigationGroup = 'Pengaturan';
 
     protected static ?int $navigationSort = 2;
 
@@ -50,3 +50,4 @@ class StoreSettingsResource extends Resource
         ];
     }
 }
+

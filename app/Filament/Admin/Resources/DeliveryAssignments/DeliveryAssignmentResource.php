@@ -20,7 +20,7 @@ class DeliveryAssignmentResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
 
-    protected static ?string $navigationGroup = 'Transaksi';
+    protected static \UnitEnum|string|null $navigationGroup = 'Transaksi';
 
     protected static ?int $navigationSort = 2;
 
@@ -50,3 +50,4 @@ class DeliveryAssignmentResource extends Resource
         ];
     }
 }
+
