@@ -30,6 +30,7 @@ class AppServiceProvider extends ServiceProvider
         if (!is_dir($tempPath)) {
             mkdir($tempPath, 0755, true);
         }
-        \PhpOffice\PhpSpreadsheet\Settings::setTempDir($tempPath);
+        putenv("TMPDIR={$tempPath}");
+        \PhpOffice\PhpSpreadsheet\Shared\File::setUseUploadTempDirectory(true);
     }
 }
