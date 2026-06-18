@@ -18,7 +18,11 @@ class SyncLogResource extends Resource
 {
     protected static ?string $model = SyncLog::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPath;
+
+    protected static ?string $navigationGroup = 'Pengaturan';
+
+    protected static ?int $navigationSort = 3;
 
     public static function form(Schema $schema): Schema
     {

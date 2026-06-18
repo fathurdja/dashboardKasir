@@ -18,7 +18,11 @@ class DeliveryAssignmentResource extends Resource
 {
     protected static ?string $model = DeliveryAssignment::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;
+
+    protected static ?string $navigationGroup = 'Transaksi';
+
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {

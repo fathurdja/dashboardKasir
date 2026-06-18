@@ -19,35 +19,58 @@
    SIDEBAR OVERRIDES
    ============================================ */
 
-/* Sidebar background */
+/* Sidebar background with depth shadow */
 .fi-sidebar {
     background: linear-gradient(180deg, #1B211A 0%, #151A14 100%) !important;
     border-right: 1px solid rgba(139, 174, 102, 0.15) !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2), 1px 0 8px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* Sidebar nav items */
+/* Sidebar nav items — elevated card-style */
 .fi-sidebar-item a,
 .fi-sidebar-item button {
     color: rgba(235, 213, 171, 0.75) !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-radius: 10px !important;
+    margin: 2px 8px !important;
+    padding: 8px 12px !important;
 }
 
 .fi-sidebar-item a:hover,
 .fi-sidebar-item button:hover {
     color: #EBD5AB !important;
     background: rgba(139, 174, 102, 0.12) !important;
+    box-shadow: 0 2px 12px rgba(139, 174, 102, 0.1),
+                inset 0 1px 0 rgba(139, 174, 102, 0.08) !important;
+    transform: translateX(3px);
 }
 
-/* Active sidebar item */
+/* Sidebar nav icons */
+.fi-sidebar-item .fi-sidebar-item-icon {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.fi-sidebar-item a:hover .fi-sidebar-item-icon,
+.fi-sidebar-item button:hover .fi-sidebar-item-icon {
+    color: #8BAE66 !important;
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 4px rgba(139, 174, 102, 0.3));
+}
+
+/* Active sidebar item — glowing card */
 .fi-sidebar-item-active a,
 .fi-sidebar-item-active button {
     color: #EBD5AB !important;
-    background: rgba(139, 174, 102, 0.2) !important;
+    background: rgba(139, 174, 102, 0.18) !important;
     border-left: 3px solid #8BAE66 !important;
+    box-shadow: 0 4px 16px rgba(139, 174, 102, 0.15),
+                inset 0 1px 0 rgba(139, 174, 102, 0.12),
+                0 1px 3px rgba(0, 0, 0, 0.12) !important;
 }
 
 .fi-sidebar-item-active .fi-sidebar-item-icon {
     color: #8BAE66 !important;
+    filter: drop-shadow(0 0 6px rgba(139, 174, 102, 0.4));
 }
 
 /* Sidebar group labels */
@@ -56,11 +79,13 @@
     font-size: 0.65rem !important;
     text-transform: uppercase !important;
     letter-spacing: 0.08em !important;
+    padding: 0 8px !important;
 }
 
 /* Sidebar brand/header */
 .fi-sidebar-header {
     border-bottom: 1px solid rgba(139, 174, 102, 0.15) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
 .fi-sidebar-header a,
@@ -68,6 +93,19 @@
     color: #8BAE66 !important;
     font-weight: 800 !important;
     letter-spacing: -0.02em !important;
+}
+
+/* Sidebar collapse toggle button */
+.fi-sidebar-close-btn,
+.fi-sidebar-open-btn {
+    transition: all 0.25s ease !important;
+}
+
+.fi-sidebar-close-btn:hover,
+.fi-sidebar-open-btn:hover {
+    color: #8BAE66 !important;
+    background: rgba(139, 174, 102, 0.12) !important;
+    box-shadow: 0 2px 8px rgba(139, 174, 102, 0.15) !important;
 }
 
 /* ============================================

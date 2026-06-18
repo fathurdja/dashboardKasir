@@ -39,6 +39,15 @@ class AdminPanelProvider extends PanelProvider
                 'danger'  => Color::Rose,
                 'info'    => Color::Sky,
             ])
+            ->navigationGroups([
+                \Filament\Navigation\NavigationGroup::make('Master Data')
+                    ->icon('heroicon-o-building-storefront'),
+                \Filament\Navigation\NavigationGroup::make('Transaksi')
+                    ->icon('heroicon-o-banknotes'),
+                \Filament\Navigation\NavigationGroup::make('Pengaturan')
+                    ->icon('heroicon-o-wrench-screwdriver')
+                    ->collapsed(),
+            ])
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\Filament\Admin\Pages')
