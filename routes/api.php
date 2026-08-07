@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\QrisPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryController;
 use App\Http\Controllers\Api\V1\StockReportController;
 use App\Http\Controllers\Api\V1\AiController;
+use App\Http\Controllers\Api\V1\NotificationController;
 
 // Auth routes (public)
 Route::prefix('v1/auth')->group(function () {
@@ -87,6 +88,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     // Stock Report
     Route::get('/stock-report/daily', [StockReportController::class, 'daily']);
+
+    // Notifications & FCM
+    Route::post('/devices/fcm-token', [NotificationController::class, 'registerFcmToken']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
 
     // AI-STICH Placeholder
     Route::get('/ai/forecast', [AiController::class, 'forecast']);

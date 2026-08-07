@@ -12,6 +12,7 @@ class Device extends Model
         'user_id',
         'device_name',
         'platform',
+        'fcm_token',
         'last_synced_at',
         'is_active',
     ];

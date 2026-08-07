@@ -13,8 +13,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
+use App\Services\NotificationService;
+
 class TransactionController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
     /**
      * List transactions with filters (paginated).
      */
@@ -169,10 +177,27 @@ class TransactionController extends Controller
                         'reference_id' => $order->id,
                         'notes' => 'Penjualan: ' . $order->receipt_number,
                     ]);
+
+                    if ($product) {
+                        $this->notificationService->notifyStockUpdate(
+                            $product,
+                            'out',
+                            $totalQty,
+                            $product->getCurrentStock()
+                        );
+                    }
                 }
             }
 
             DB::commit();
+
+            // Dispatch transaction created notification
+            $this->notificationService->notifyTransactionCreated($order);
+
+            // Dispatch payment success notification if completed immediately (e.g. cash)
+            if ($status === 'completed') {
+                $this->notificationService->notifyPaymentSuccess($order);
+            }
 
             $order->load('items.product');
 
@@ -219,6 +244,16 @@ class TransactionController extends Controller
                     'reference_id' => $order->id,
                     'notes' => 'Void: ' . $order->receipt_number,
                 ]);
+
+                $product = Product::find($item->product_id);
+                if ($product) {
+                    $this->notificationService->notifyStockUpdate(
+                        $product,
+                        'in',
+                        $totalQty,
+                        $product->getCurrentStock()
+                    );
+                }
             }
 
             DB::commit();
@@ -264,9 +299,22 @@ class TransactionController extends Controller
                     'reference_id' => $order->id,
                     'notes' => 'Bon Lunas: ' . $order->receipt_number,
                 ]);
+
+                $product = Product::find($item->product_id);
+                if ($product) {
+                    $this->notificationService->notifyStockUpdate(
+                        $product,
+                        'out',
+                        $totalQty,
+                        $product->getCurrentStock()
+                    );
+                }
             }
 
             DB::commit();
+
+            // Dispatch payment success notification for paid bon
+            $this->notificationService->notifyPaymentSuccess($order);
 
             return response()->json(['message' => 'Bon marked as paid successfully']);
 

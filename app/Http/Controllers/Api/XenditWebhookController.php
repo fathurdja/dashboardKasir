@@ -6,10 +6,19 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Order;
 use App\Models\StockTransaction;
+use App\Models\Product;
+use App\Services\NotificationService;
 use Illuminate\Support\Facades\Log;
 
 class XenditWebhookController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     public function handle(Request $request)
     {
         $data = $request->all();
@@ -41,7 +50,20 @@ class XenditWebhookController extends Controller
                         'reference_id' => $order->id,
                         'notes' => 'Penjualan (Xendit): ' . $order->receipt_number,
                     ]);
+
+                    $product = Product::find($item->product_id);
+                    if ($product) {
+                        $this->notificationService->notifyStockUpdate(
+                            $product,
+                            'out',
+                            $item->quantity,
+                            $product->getCurrentStock()
+                        );
+                    }
                 }
+
+                // Dispatch payment success notification
+                $this->notificationService->notifyPaymentSuccess($order);
             }
         } elseif (isset($data['status']) && in_array($data['status'], ['EXPIRED', 'SETTLED'])) {
             $order = Order::where('id', $data['external_id'])->first();
