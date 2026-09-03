@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'iak' => [
+        'mode' => env('IAK_MODE', 'sandbox'),
+        'user_hp' => env('IAK_USER_HP'),
+        'api_key' => env('IAK_API_KEY'),
+    ],
+
 ];

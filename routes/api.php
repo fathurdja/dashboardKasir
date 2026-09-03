@@ -41,6 +41,9 @@ Route::prefix('v1/auth')->group(function () {
 // Xendit webhook v1 (public, no auth)
 Route::post('v1/webhook/xendit', [\App\Http\Controllers\Api\XenditWebhookController::class, 'handle']);
 
+// IAK PPOB Webhook (public, no auth)
+Route::post('v1/webhook/iak', [\App\Http\Controllers\Api\IakWebhookController::class, 'handle']);
+
 // Protected v1 routes
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 

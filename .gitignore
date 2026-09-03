@@ -13,6 +13,12 @@
 /storage/debugbar/
 
 .env
+
+# Ignore Excel & PDF files
+*.xlsx
+*.xls
+~$*.xlsx
+*.pdf
 .env.backup
 .env.production
 .phpactor.json
