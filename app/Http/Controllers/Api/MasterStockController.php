@@ -88,7 +88,8 @@ class MasterStockController extends Controller
             'NTYUNIT' => 'sometimes|string',
             'kdklp'   => 'nullable|string',
             'hjual'   => 'sometimes|numeric',
-            'stock'   => 'sometimes|numeric|min:0',
+            'stock'   => 'sometimes|numeric',
+            'kuota'   => 'sometimes|numeric',
             'cmodule' => 'nullable|string',
             'userup'  => 'nullable|string',
             'tglup'   => 'nullable|date',
@@ -104,19 +105,20 @@ class MasterStockController extends Controller
             if (isset($validated['hjual'])) $productUpdates['price'] = $stock->hjual;
             if (isset($validated['NTYUNIT'])) $productUpdates['name'] = $stock->NTYUNIT;
             if (isset($validated['kdklp'])) $productUpdates['kdklp'] = $validated['kdklp'];
+            if (isset($validated['kuota'])) $productUpdates['kuota'] = (int) $validated['kuota'];
             if (!empty($productUpdates)) {
                 $product->update($productUpdates);
             }
         }
 
-        // Shared stock sync for groups (e.g. GALON)
-        if (isset($validated['stock']) && !empty($stock->kdklp)) {
-            $newStock = (int) $validated['stock'];
-            MasterStock::where('kdklp', $stock->kdklp)->update(['stock' => $newStock, 'tglup' => now()]);
-            Product::where('kdklp', $stock->kdklp)->update(['stock' => $newStock]);
-            $stock->refresh();
+        // If setting kuota, sync to all items in group
+        if (isset($validated['kuota']) && !empty($stock->kdklp)) {
+            $newKuota = (int) $validated['kuota'];
+            MasterStock::where('kdklp', $stock->kdklp)->update(['kuota' => $newKuota]);
+            Product::where('kdklp', $stock->kdklp)->update(['kuota' => $newKuota]);
         }
 
+        $stock->refresh();
         return new MasterStockResource($stock);
     }
 
@@ -128,45 +130,40 @@ class MasterStockController extends Controller
         $kdklp = $request->input('kdklp', $request->input('category', $request->input('group')));
         $tyunit = $request->input('tyunit', $request->input('TYUNIT', $request->input('id')));
         $stock = $request->input('stock', $request->input('quantity', $request->input('qty')));
+        $kuota = $request->input('kuota', $request->input('quota'));
         $mode = $request->input('mode', 'set'); // 'set' or 'add'
+        $resetSales = $request->boolean('reset_sales', false);
 
-        if ($stock === null) {
-            return response()->json(['success' => false, 'message' => 'Nilai stock wajib diisi'], 422);
-        }
-
-        $stockValue = (int) $stock;
-
-        // If target is directly a group / category (e.g. "GALON")
-        if (!empty($kdklp)) {
-            $targetGroup = strtoupper(trim($kdklp));
+        // 1. Setting Group Quota (e.g. GALON = 100)
+        if (!empty($kdklp) || $kuota !== null) {
+            $targetGroup = strtoupper(trim($kdklp ?: 'GALON'));
             $groupQuery = MasterStock::where('kdklp', $targetGroup);
             if ($groupQuery->count() === 0) {
-                // Try partial search e.g. "galon" in group
                 $found = MasterStock::where('kdklp', 'LIKE', "%{$targetGroup}%")->first();
                 if ($found) {
                     $targetGroup = $found->kdklp;
-                    $groupQuery = MasterStock::where('kdklp', $targetGroup);
                 }
             }
 
-            if ($groupQuery->count() > 0) {
-                if ($mode === 'add') {
-                    MasterStock::where('kdklp', $targetGroup)->increment('stock', $stockValue);
-                    Product::where('kdklp', $targetGroup)->increment('stock', $stockValue);
-                } else {
-                    MasterStock::where('kdklp', $targetGroup)->update(['stock' => $stockValue, 'tglup' => now()]);
-                    Product::where('kdklp', $targetGroup)->update(['stock' => $stockValue]);
-                }
+            $kuotaVal = (int) ($kuota ?? $stock ?? 0);
+            MasterStock::where('kdklp', $targetGroup)->update(['kuota' => $kuotaVal]);
+            Product::where('kdklp', $targetGroup)->update(['kuota' => $kuotaVal]);
 
-                $sample = MasterStock::where('kdklp', $targetGroup)->first();
-                return response()->json([
-                    'success' => true,
-                    'message' => "Stock untuk kelompok {$targetGroup} berhasil diperbarui",
-                    'group' => $targetGroup,
-                    'stock' => (int) $sample->stock,
-                    'items_count' => MasterStock::where('kdklp', $targetGroup)->count(),
-                ]);
+            if ($resetSales || $request->has('reset')) {
+                MasterStock::where('kdklp', $targetGroup)->update(['stock' => 0]);
+                Product::where('kdklp', $targetGroup)->update(['stock' => 0]);
             }
+
+            $totalTerjual = (int) MasterStock::where('kdklp', $targetGroup)->sum('stock');
+            return response()->json([
+                'success' => true,
+                'message' => "Kuota untuk kelompok {$targetGroup} berhasil diset ke {$kuotaVal} unit",
+                'group' => $targetGroup,
+                'kuota' => $kuotaVal,
+                'total_terjual' => $totalTerjual,
+                'sisa_kuota' => max(0, $kuotaVal - $totalTerjual),
+                'items_count' => MasterStock::where('kdklp', $targetGroup)->count(),
+            ]);
         }
 
         if (is_numeric($tyunit)) {
@@ -189,17 +186,9 @@ class MasterStockController extends Controller
             return response()->json(['success' => false, 'message' => "Item {$tyunit} tidak ditemukan"], 404);
         }
 
-        // Shared stock sync for groups (e.g. all GALON items)
-        if (!empty($m->kdklp)) {
-            if ($mode === 'add') {
-                MasterStock::where('kdklp', $m->kdklp)->increment('stock', $stockValue);
-                Product::where('kdklp', $m->kdklp)->increment('stock', $stockValue);
-            } else {
-                MasterStock::where('kdklp', $m->kdklp)->update(['stock' => $stockValue, 'tglup' => now()]);
-                Product::where('kdklp', $m->kdklp)->update(['stock' => $stockValue]);
-            }
-            $m->refresh();
-        } else {
+        // 2. Update individual product stock / sales count
+        if ($stock !== null) {
+            $stockValue = (int) $stock;
             if ($mode === 'add') {
                 $m->stock += $stockValue;
             } else {
@@ -229,16 +218,23 @@ class MasterStockController extends Controller
             ->map(function ($row) {
                 $items = MasterStock::where('kdklp', $row->kdklp)->get();
                 $first = $items->first();
+                $kuota = $first ? (int) $first->kuota : 0;
+                $totalTerjual = (int) $items->sum('stock');
+                $sisaKuota = $kuota > 0 ? max(0, $kuota - $totalTerjual) : 0;
+
                 return [
                     'group' => $row->kdklp,
-                    'stock' => $first ? (int) $first->stock : 0,
+                    'kuota' => $kuota,
+                    'total_terjual' => $totalTerjual,
+                    'sisa_kuota' => $sisaKuota,
                     'items_count' => $items->count(),
                     'items' => $items->map(function ($it) {
                         return [
-                            'tyunit' => $it->TYUNIT,
-                            'name'   => $it->NTYUNIT,
-                            'price'  => (int) $it->hjual,
-                            'stock'  => (int) $it->stock,
+                            'tyunit'   => $it->TYUNIT,
+                            'name'     => $it->NTYUNIT,
+                            'price'    => (int) $it->hjual,
+                            'stock'    => (int) $it->stock, // Terjual untuk varian ini
+                            'terjual'  => (int) $it->stock,
                         ];
                     })
                 ];

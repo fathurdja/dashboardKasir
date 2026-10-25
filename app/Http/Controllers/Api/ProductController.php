@@ -11,7 +11,21 @@ class ProductController extends Controller
 {
     public function index()
     {
-        return response()->json(Product::all());
+        $products = Product::all()->map(function ($p) {
+            $kuota = (int) ($p->kuota ?? 0);
+            $totalTerjualGroup = !empty($p->kdklp)
+                ? (int) Product::where('kdklp', $p->kdklp)->sum('stock')
+                : (int) $p->stock;
+            $sisaKuota = $kuota > 0 ? max(0, $kuota - $totalTerjualGroup) : 0;
+
+            $arr = $p->toArray();
+            $arr['terjual'] = (int) $p->stock;
+            $arr['kuota'] = $kuota;
+            $arr['sisa_kuota'] = $sisaKuota;
+            return $arr;
+        });
+
+        return response()->json($products);
     }
 
     public function store(Request $request)
@@ -59,6 +73,7 @@ class ProductController extends Controller
             'kdklp' => 'nullable|string|max:50',
             'price' => 'sometimes|numeric',
             'stock' => 'sometimes|numeric',
+            'kuota' => 'sometimes|numeric',
         ]);
 
         $product->update($validated);
@@ -72,16 +87,17 @@ class ProductController extends Controller
             if (isset($validated['price'])) $masterUpdates['hjual'] = $product->price;
             if (isset($validated['name'])) $masterUpdates['NTYUNIT'] = $product->name;
             if (isset($validated['kdklp'])) $masterUpdates['kdklp'] = $validated['kdklp'];
+            if (isset($validated['kuota'])) $masterUpdates['kuota'] = (int) $validated['kuota'];
             if (!empty($masterUpdates)) {
                 $master->update($masterUpdates);
             }
         }
 
-        // Shared stock sync for groups (e.g. GALON)
-        if (isset($validated['stock']) && !empty($product->kdklp)) {
-            $newStock = (int) $validated['stock'];
-            Product::where('kdklp', $product->kdklp)->update(['stock' => $newStock]);
-            MasterStock::where('kdklp', $product->kdklp)->update(['stock' => $newStock, 'tglup' => now()]);
+        // If kuota was provided and product has kdklp, sync kuota across the group
+        if (isset($validated['kuota']) && !empty($product->kdklp)) {
+            $newKuota = (int) $validated['kuota'];
+            Product::where('kdklp', $product->kdklp)->update(['kuota' => $newKuota]);
+            MasterStock::where('kdklp', $product->kdklp)->update(['kuota' => $newKuota]);
         }
 
         return response()->json($product);

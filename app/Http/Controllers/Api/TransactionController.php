@@ -50,8 +50,8 @@ class TransactionController extends Controller
 
             DB::transaction(function () use ($validated) {
 
-                // 1. Group requirements by kdklp (or individual item)
-                $groupRequirements = [];
+                // 1. Group required quantities and resolve items
+                $groupSalesNeeded = [];
                 $resolvedItems = [];
 
                 foreach ($validated['items'] as $item) {
@@ -65,44 +65,50 @@ class TransactionController extends Controller
 
                     $totalKeluar = (int) $item['quantity'] + (int) ($item['bonus'] ?? 0);
                     $groupKey = !empty($barang->kdklp) ? $barang->kdklp : $barang->TYUNIT;
-                    $groupName = !empty($barang->kdklp) ? $barang->kdklp : $barang->NTYUNIT;
 
-                    if (!isset($groupRequirements[$groupKey])) {
-                        $groupRequirements[$groupKey] = [
-                            'stock' => (int) $barang->stock,
+                    if (!isset($groupSalesNeeded[$groupKey])) {
+                        $groupSalesNeeded[$groupKey] = [
                             'needed' => 0,
-                            'name' => $groupName,
-                            'kdklp' => $barang->kdklp,
-                            'tyunit' => $barang->TYUNIT,
-                            'barang_name' => $barang->NTYUNIT,
+                            'kdklp'  => $barang->kdklp,
+                            'name'   => !empty($barang->kdklp) ? $barang->kdklp : $barang->NTYUNIT,
                         ];
                     }
 
-                    $groupRequirements[$groupKey]['needed'] += $totalKeluar;
+                    $groupSalesNeeded[$groupKey]['needed'] += $totalKeluar;
 
                     $resolvedItems[] = [
-                        'item' => $item,
+                        'item'   => $item,
                         'barang' => $barang,
+                        'totalKeluar' => $totalKeluar,
                     ];
                 }
 
-                // 2. Validate stock sufficiency for all groups
-                foreach ($groupRequirements as $key => $req) {
-                    if ($req['stock'] < $req['needed']) {
-                        throw new \Exception("Stock {$req['name']} tidak mencukupi (Tersedia: {$req['stock']}, Dibutuhkan: {$req['needed']})");
+                // 2. Validate Quota (if kuota is configured > 0)
+                foreach ($groupSalesNeeded as $groupKey => $info) {
+                    if (!empty($info['kdklp'])) {
+                        $kuota = (int) MasterStock::where('kdklp', $info['kdklp'])->value('kuota');
+                        if ($kuota > 0) {
+                            $currentSold = (int) MasterStock::where('kdklp', $info['kdklp'])->sum('stock');
+                            $newTotal = $currentSold + $info['needed'];
+                            if ($newTotal > $kuota) {
+                                $sisaKuota = max(0, $kuota - $currentSold);
+                                throw new \Exception("Total penjualan {$info['name']} ({$newTotal}) melebihi kuota {$kuota}. Sisa kuota tersedia: {$sisaKuota} unit");
+                            }
+                        }
                     }
                 }
 
-                // 3. Deduct stock per group across munit and products
-                foreach ($groupRequirements as $key => $req) {
-                    $deduct = $req['needed'];
-                    if (!empty($req['kdklp'])) {
-                        MasterStock::where('kdklp', $req['kdklp'])->decrement('stock', $deduct);
-                        Product::where('kdklp', $req['kdklp'])->decrement('stock', $deduct);
-                    } else {
-                        MasterStock::where('TYUNIT', $req['tyunit'])->decrement('stock', $deduct);
-                        Product::where('name', $req['barang_name'])->decrement('stock', $deduct);
-                    }
+                // 3. Update individual product sales count (stock)
+                foreach ($resolvedItems as $r) {
+                    $item = $r['item'];
+                    $barang = $r['barang'];
+                    $totalKeluar = $r['totalKeluar'];
+
+                    MasterStock::where('TYUNIT', $item['tyunit'])->increment('stock', $totalKeluar);
+
+                    $prodId = str_starts_with($item['tyunit'], 'BV') ? (int) substr($item['tyunit'], 2) : null;
+                    $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $barang->NTYUNIT);
+                    $prodQuery->increment('stock', $totalKeluar);
                 }
 
                 // 4. Create Transaction record
@@ -175,13 +181,11 @@ class TransactionController extends Controller
                 $totalReturn = (int) $item->quantity + (int) ($item->bonus ?? 0);
                 $barang = MasterStock::where('TYUNIT', $item->tyunit)->first();
                 if ($barang) {
-                    if (!empty($barang->kdklp)) {
-                        MasterStock::where('kdklp', $barang->kdklp)->increment('stock', $totalReturn);
-                        Product::where('kdklp', $barang->kdklp)->increment('stock', $totalReturn);
-                    } else {
-                        MasterStock::where('TYUNIT', $barang->TYUNIT)->increment('stock', $totalReturn);
-                        Product::where('name', $barang->NTYUNIT)->increment('stock', $totalReturn);
-                    }
+                    MasterStock::where('TYUNIT', $item->tyunit)->decrement('stock', $totalReturn);
+
+                    $prodId = str_starts_with($item->tyunit, 'BV') ? (int) substr($item->tyunit, 2) : null;
+                    $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $item->nama_barang);
+                    $prodQuery->decrement('stock', $totalReturn);
                 }
             }
 
