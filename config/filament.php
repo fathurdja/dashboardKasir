@@ -20,7 +20,7 @@ return [
             'font' => 'Inter',
             'middleware' => [
                 'web',
-                'auth:sanctum',
+                'auth',
             ],
             'authGuard' => 'web',
             'pages' => [

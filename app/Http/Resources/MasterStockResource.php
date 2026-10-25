@@ -19,6 +19,7 @@ class MasterStockResource extends JsonResource
             'NTYUNIT'  => $this->NTYUNIT,
             'kdklp'    => $this->kdklp,
             'hjual'    => $this->hjual,
+            'stock'    => (int) $this->stock,
             'cmodule'  => $this->cmodule,
             'userup'   => $this->userup,
             'tglup'    => $this->tglup,

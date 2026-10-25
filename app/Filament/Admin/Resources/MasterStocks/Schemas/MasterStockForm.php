@@ -19,16 +19,19 @@ class MasterStockForm
                     ->maxLength(60)
                     ->label('Unit Name'),
                 Forms\Components\TextInput::make('kdklp')
-                    ->required()
-                    ->maxLength(3)
-                    ->label('Group Code'),
+                    ->maxLength(50)
+                    ->label('Kelompok (Contoh: GALON, BOTOL_600, BOTOL_1500, GELAS)'),
                 Forms\Components\TextInput::make('hjual')
                     ->numeric()
                     ->label('Selling Price')
                     ->prefix('Rp'),
-                Forms\Components\TextInput::make('cmodule')
-                    ->maxLength(15)
-                    ->default(''),
+                
+Forms\Components\TextInput::make('stock')
+    ->numeric()
+    ->required()
+    ->default(0)
+    ->label('Jumlah Stock')
+    ->minValue(0),    
                 // Forms\Components\TextInput::make('userup')
                 //     ->maxLength(60)
                 //     ->default(fn() => auth()->user()->name), // Contoh auto-fill user

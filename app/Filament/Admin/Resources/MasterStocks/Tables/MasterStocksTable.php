@@ -23,13 +23,15 @@ class MasterStocksTable
                     ->label('Unit Name')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('kdklp')
-                    ->label('Group'),
+                    ->label('Kelompok')
+                    ->badge()
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('hjual')
                     ->label('Price')
                     ->money('IDR')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('userup')
-                    ->label('Updated By'),
+                Tables\Columns\TextColumn::make('stock')
+                    ->label('Jumlah Stock'),    
                 Tables\Columns\TextColumn::make('tglup')
                     ->label('Update Date')
                     ->date()

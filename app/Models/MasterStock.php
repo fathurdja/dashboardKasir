@@ -15,10 +15,29 @@ class MasterStock extends Model
         'NTYUNIT',
         'kdklp',
         'hjual',
+        'stock',
         'cmodule',
         'userup',
         'tglup'
     ];
+
+    protected static function booted()
+    {
+        static::saved(function ($model) {
+            if ($model->wasChanged('stock') && !empty($model->kdklp)) {
+                static::withoutEvents(function () use ($model) {
+                    static::where('kdklp', $model->kdklp)
+                        ->where('TYUNIT', '!=', $model->TYUNIT)
+                        ->update(['stock' => $model->stock, 'tglup' => now()]);
+
+                    Product::withoutEvents(function () use ($model) {
+                        Product::where('kdklp', $model->kdklp)
+                            ->update(['stock' => $model->stock]);
+                    });
+                });
+            }
+        });
+    }
 
     public $timestamps = false; // Karena menggunakan tglup manual
 
