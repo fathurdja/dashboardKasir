@@ -5,14 +5,76 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\TransactionController;
 use Illuminate\Support\Facades\Route;
 
+/*
+|--------------------------------------------------------------------------
+| API Routes - Boneva Kasir (dashboardLO)
+|--------------------------------------------------------------------------
+| Base URL: https://laravel.fathurrzqn8n.web.id/api
+|
+| 1. STOK AWAL (KUOTA KOMODITAS):
+|    - GET  /api/stock-awal
+|    - POST /api/stock-awal
+|
+| 2. STOK TERJUAL (PENJUALAN PER VARIAN):
+|    - GET  /api/stock-terjual
+|    - POST /api/stock-terjual/reset
+|
+| 3. RINGKASAN STOK (Stok Awal, Terjual, Sisa):
+|    - GET  /api/stock-summary
+|    - GET  /api/stock-groups
+|
+| 4. TRANSAKSI (CHECKOUT KASIR):
+|    - GET    /api/transaksi
+|    - POST   /api/transaksi
+|    - GET    /api/transaksi/{id}
+|    - DELETE /api/transaksi/{id}
+|
+| 5. PRODUK & MASTER STOCKS:
+|    - GET  /api/products
+|    - GET  /api/master-stocks
+*/
+
+// ==========================================
+// 1. STOK AWAL / KUOTA KOMODITAS
+// ==========================================
+Route::get('stock-awal', [MasterStockController::class, 'getStockAwal']);
+Route::post('stock-awal', [MasterStockController::class, 'setStockAwal']);
+
+// ==========================================
+// 2. STOK TERJUAL / PENJUALAN PER VARIAN
+// ==========================================
+Route::get('stock-terjual', [MasterStockController::class, 'getStockTerjual']);
+Route::post('stock-terjual/reset', [MasterStockController::class, 'resetStockTerjual']);
+
+// ==========================================
+// 3. RINGKASAN STOK (Stok Awal vs Terjual vs Sisa)
+// ==========================================
+Route::get('stock-summary', [MasterStockController::class, 'stockSummary']);
+Route::get('stock-groups', [MasterStockController::class, 'stockGroups']);
+Route::get('stocks/groups', [MasterStockController::class, 'stockGroups']);
+Route::get('stocks/categories', [MasterStockController::class, 'stockGroups']);
+
+// ==========================================
+// 4. TRANSAKSI / KASIR CHECKOUT
+// ==========================================
+Route::prefix('transaksi')->group(function () {
+    Route::get('/', [TransactionController::class, 'index']);
+    Route::get('/{id}', [TransactionController::class, 'show']);
+    Route::post('/', [TransactionController::class, 'store']);
+    Route::put('/{id}', [TransactionController::class, 'update']);
+    Route::delete('/{id}', [TransactionController::class, 'destroy']);
+});
+
+// ==========================================
+// 5. MASTER DATA & COMPATIBILITY ENDPOINTS
+// ==========================================
+Route::apiResource('products', ProductController::class);
+Route::apiResource('master-stocks', MasterStockController::class);
+
 Route::post('master-stocks/sync', [MasterStockController::class, 'sync']);
 Route::post('products/sync', [MasterStockController::class, 'sync']);
 Route::post('sync-stocks', [MasterStockController::class, 'sync']);
 Route::post('sync-products', [MasterStockController::class, 'sync']);
-
-Route::get('stock-groups', [MasterStockController::class, 'stockGroups']);
-Route::get('stocks/groups', [MasterStockController::class, 'stockGroups']);
-Route::get('stocks/categories', [MasterStockController::class, 'stockGroups']);
 
 Route::get('stocks', [MasterStockController::class, 'index']);
 Route::post('stocks', [MasterStockController::class, 'updateStock']);
@@ -22,14 +84,3 @@ Route::post('stocks/update', [MasterStockController::class, 'updateStock']);
 Route::post('stock/update', [MasterStockController::class, 'updateStock']);
 Route::post('update-stock', [MasterStockController::class, 'updateStock']);
 Route::post('stock-in', [MasterStockController::class, 'updateStock']);
-
-Route::apiResource('products', ProductController::class);
-
-Route::prefix('transaksi')->group(function () {
-    Route::get('/', [TransactionController::class, 'index']);
-    Route::get('/{id}', [TransactionController::class, 'show']);
-    Route::post('/', [TransactionController::class, 'store']);
-    Route::put('/{id}', [TransactionController::class, 'update']);
-    Route::delete('/{id}', [TransactionController::class, 'destroy']);
-});
-Route::apiResource('master-stocks', MasterStockController::class);

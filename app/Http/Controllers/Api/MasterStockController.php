@@ -211,6 +211,75 @@ class MasterStockController extends Controller
      */
     public function stockGroups()
     {
+        return $this->stockSummary();
+    }
+
+    /**
+     * Set Stok Awal / Kuota Komoditas
+     * Endpoint: POST /api/stock-awal
+     */
+    public function setStockAwal(Request $request)
+    {
+        $validated = $request->validate([
+            'kelompok'      => 'sometimes|string',
+            'kdklp'         => 'sometimes|string',
+            'category'      => 'sometimes|string',
+            'kuota'         => 'sometimes|numeric|min:0',
+            'stock_awal'    => 'sometimes|numeric|min:0',
+            'reset_terjual' => 'sometimes|boolean',
+        ]);
+
+        $group = strtoupper(trim($validated['kelompok'] ?? $validated['kdklp'] ?? $validated['category'] ?? 'GALON'));
+        $kuotaVal = (int) ($validated['stock_awal'] ?? $validated['kuota'] ?? 0);
+        $resetTerjual = $request->boolean('reset_terjual', false);
+
+        // Fuzzy match nama kelompok
+        $match = MasterStock::where('kdklp', $group)->first();
+        if (!$match) {
+            $match = MasterStock::where('kdklp', 'LIKE', "%{$group}%")->first();
+            if ($match) {
+                $group = $match->kdklp;
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Kelompok {$group} tidak ditemukan. Pilihan kelompok yang tersedia: GALON, BOTOL_600, BOTOL_1500, GELAS."
+                ], 404);
+            }
+        }
+
+        // Set kuota awal
+        MasterStock::where('kdklp', $group)->update(['kuota' => $kuotaVal, 'tglup' => now()]);
+        Product::where('kdklp', $group)->update(['kuota' => $kuotaVal]);
+
+        // Opsi reset counter terjual ke 0 (biasanya untuk awal hari baru)
+        if ($resetTerjual) {
+            MasterStock::where('kdklp', $group)->update(['stock' => 0]);
+            Product::where('kdklp', $group)->update(['stock' => 0]);
+        }
+
+        $totalTerjual = (int) MasterStock::where('kdklp', $group)->sum('stock');
+        $sisaStock = max(0, $kuotaVal - $totalTerjual);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Stok awal untuk kelompok {$group} berhasil diset ke {$kuotaVal} unit",
+            'data' => [
+                'kelompok'      => $group,
+                'stock_awal'    => $kuotaVal,
+                'total_terjual' => $totalTerjual,
+                'sisa_stock'    => $sisaStock,
+                'reset_terjual' => $resetTerjual,
+                'jumlah_produk' => MasterStock::where('kdklp', $group)->count(),
+            ]
+        ], 200);
+    }
+
+    /**
+     * Get Daftar Stok Awal per Kelompok
+     * Endpoint: GET /api/stock-awal
+     */
+    public function getStockAwal()
+    {
         $groups = MasterStock::select('kdklp')
             ->distinct()
             ->whereNotNull('kdklp')
@@ -218,23 +287,105 @@ class MasterStockController extends Controller
             ->map(function ($row) {
                 $items = MasterStock::where('kdklp', $row->kdklp)->get();
                 $first = $items->first();
-                $kuota = $first ? (int) $first->kuota : 0;
+                $stockAwal = $first ? (int) $first->kuota : 0;
                 $totalTerjual = (int) $items->sum('stock');
-                $sisaKuota = $kuota > 0 ? max(0, $kuota - $totalTerjual) : 0;
+                $sisaStock = $stockAwal > 0 ? max(0, $stockAwal - $totalTerjual) : 0;
 
                 return [
-                    'group' => $row->kdklp,
-                    'kuota' => $kuota,
+                    'kelompok'      => $row->kdklp,
+                    'stock_awal'    => $stockAwal,
                     'total_terjual' => $totalTerjual,
-                    'sisa_kuota' => $sisaKuota,
-                    'items_count' => $items->count(),
-                    'items' => $items->map(function ($it) {
+                    'sisa_stock'    => $sisaStock,
+                    'jumlah_produk' => $items->count(),
+                ];
+            });
+
+        return response()->json($groups);
+    }
+
+    /**
+     * Get Rincian Stok Terjual per Produk
+     * Endpoint: GET /api/stock-terjual
+     */
+    public function getStockTerjual(Request $request)
+    {
+        $query = MasterStock::query();
+        if ($request->has('kelompok')) {
+            $query->where('kdklp', strtoupper($request->kelompok));
+        }
+
+        $items = $query->get()->map(function ($it) {
+            return [
+                'tyunit'      => $it->TYUNIT,
+                'nama_produk' => $it->NTYUNIT,
+                'kelompok'    => $it->kdklp,
+                'harga'       => (int) $it->hjual,
+                'terjual'     => (int) $it->stock,
+                'tglup'       => $it->tglup,
+            ];
+        });
+
+        $totalTerjualSemua = $items->sum('terjual');
+
+        return response()->json([
+            'total_terjual_keseluruhan' => $totalTerjualSemua,
+            'items'                     => $items,
+        ]);
+    }
+
+    /**
+     * Reset Counter Stok Terjual (misal Tutup Buku / Awal Hari)
+     * Endpoint: POST /api/stock-terjual/reset
+     */
+    public function resetStockTerjual(Request $request)
+    {
+        $group = $request->input('kelompok', $request->input('kdklp'));
+        if ($group) {
+            $group = strtoupper(trim($group));
+            MasterStock::where('kdklp', $group)->update(['stock' => 0]);
+            Product::where('kdklp', $group)->update(['stock' => 0]);
+            $msg = "Counter stok terjual untuk kelompok {$group} berhasil direset ke 0";
+        } else {
+            MasterStock::query()->update(['stock' => 0]);
+            Product::query()->update(['stock' => 0]);
+            $msg = "Seluruh counter stok terjual semua produk berhasil direset ke 0";
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $msg,
+        ]);
+    }
+
+    /**
+     * Ringkasan Komprehensif (Stok Awal, Terjual, Sisa)
+     * Endpoint: GET /api/stock-summary
+     */
+    public function stockSummary()
+    {
+        $groups = MasterStock::select('kdklp')
+            ->distinct()
+            ->whereNotNull('kdklp')
+            ->get()
+            ->map(function ($row) {
+                $items = MasterStock::where('kdklp', $row->kdklp)->get();
+                $first = $items->first();
+                $stockAwal = $first ? (int) $first->kuota : 0;
+                $totalTerjual = (int) $items->sum('stock');
+                $sisaStock = $stockAwal > 0 ? max(0, $stockAwal - $totalTerjual) : 0;
+
+                return [
+                    'kelompok'       => $row->kdklp,
+                    'stock_awal'     => $stockAwal,
+                    'total_terjual'  => $totalTerjual,
+                    'sisa_stock'     => $sisaStock,
+                    'jumlah_produk'  => $items->count(),
+                    'rincian_produk' => $items->map(function ($it) {
                         return [
-                            'tyunit'   => $it->TYUNIT,
-                            'name'     => $it->NTYUNIT,
-                            'price'    => (int) $it->hjual,
-                            'stock'    => (int) $it->stock, // Terjual untuk varian ini
-                            'terjual'  => (int) $it->stock,
+                            'tyunit'      => $it->TYUNIT,
+                            'nama_produk' => $it->NTYUNIT,
+                            'harga'       => (int) $it->hjual,
+                            'terjual'     => (int) $it->stock,
                         ];
                     })
                 ];
