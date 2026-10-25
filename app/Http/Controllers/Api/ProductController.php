@@ -5,12 +5,42 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MasterStock;
 use App\Models\Product;
+use App\Models\UserStock;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        $targetUserId = ($currentUser && !$currentUser->isAdmin())
+            ? $currentUser->id
+            : ($request->input('user_id') ?? null);
+
+        if ($targetUserId) {
+            UserStock::initializeForUser($targetUserId);
+            $userStocks = UserStock::where('user_id', $targetUserId)->get()->keyBy('tyunit');
+
+            $products = Product::all()->map(function ($p) use ($userStocks, $targetUserId) {
+                $code = sprintf('BV%02d', $p->id);
+                $uStock = $userStocks->get($code);
+                $kuota = $uStock ? (int) $uStock->kuota : 0;
+                $soldGroup = !empty($p->kdklp)
+                    ? (int) UserStock::where('user_id', $targetUserId)->where('kdklp', $p->kdklp)->sum('stock')
+                    : ($uStock ? (int) $uStock->stock : 0);
+                $sisaKuota = $kuota > 0 ? max(0, $kuota - $soldGroup) : 0;
+
+                $arr = $p->toArray();
+                $arr['stock'] = $uStock ? (int) $uStock->stock : 0;
+                $arr['terjual'] = $uStock ? (int) $uStock->stock : 0;
+                $arr['kuota'] = $kuota;
+                $arr['sisa_kuota'] = $sisaKuota;
+                return $arr;
+            });
+
+            return response()->json($products);
+        }
+
         $products = Product::all()->map(function ($p) {
             $kuota = (int) ($p->kuota ?? 0);
             $totalTerjualGroup = !empty($p->kdklp)
@@ -30,6 +60,14 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa tidak diizinkan menambah produk baru'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'name'  => 'required|string|max:255',
             'kdklp' => 'nullable|string|max:50',
@@ -52,12 +90,6 @@ class ProductController extends Controller
             ]
         );
 
-        if (!empty($product->kdklp)) {
-            $newStock = (int) $product->stock;
-            Product::where('kdklp', $product->kdklp)->update(['stock' => $newStock]);
-            MasterStock::where('kdklp', $product->kdklp)->update(['stock' => $newStock, 'tglup' => now()]);
-        }
-
         return response()->json($product, 201);
     }
 
@@ -68,6 +100,14 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa tidak diizinkan mengubah produk'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'name'  => 'sometimes|string|max:255',
             'kdklp' => 'nullable|string|max:50',
@@ -103,8 +143,16 @@ class ProductController extends Controller
         return response()->json($product);
     }
 
-    public function destroy(Product $product)
+    public function destroy(Request $request, Product $product)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa tidak diizinkan menghapus produk'
+            ], 403);
+        }
+
         $product->delete();
 
         return response()->json(['message' => 'Product deleted successfully']);

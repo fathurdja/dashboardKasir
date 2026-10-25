@@ -6,25 +6,65 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\MasterStockResource;
 use App\Models\MasterStock;
 use App\Models\Product;
+use App\Models\User;
+use App\Models\UserStock;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class MasterStockController extends Controller
 {
-     /**
+    /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+
+        if ($currentUser && !$currentUser->isAdmin()) {
+            UserStock::initializeForUser($currentUser->id);
+            $userStocks = UserStock::where('user_id', $currentUser->id)->get()->keyBy('tyunit');
+
+            $stocks = MasterStock::with('items')->get()->map(function ($m) use ($userStocks, $currentUser) {
+                $uStock = $userStocks->get($m->TYUNIT);
+                $kuota = $uStock ? (int) $uStock->kuota : 0;
+                $soldGroup = !empty($m->kdklp)
+                    ? (int) UserStock::where('user_id', $currentUser->id)->where('kdklp', $m->kdklp)->sum('stock')
+                    : ($uStock ? (int) $uStock->stock : 0);
+                $sisaKuota = $kuota > 0 ? max(0, $kuota - $soldGroup) : 0;
+
+                return [
+                    'TYUNIT'     => $m->TYUNIT,
+                    'NTYUNIT'    => $m->NTYUNIT,
+                    'kdklp'      => $m->kdklp,
+                    'hjual'      => (int) $m->hjual,
+                    'stock'      => $uStock ? (int) $uStock->stock : 0, // Terjual user ini
+                    'terjual'    => $uStock ? (int) $uStock->stock : 0,
+                    'kuota'      => $kuota,
+                    'sisa_kuota' => $sisaKuota,
+                    'items'      => $m->items,
+                ];
+            });
+
+            return response()->json(['data' => $stocks]);
+        }
+
         $stocks = MasterStock::with('items')->get();
         return MasterStockResource::collection($stocks);
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Store a newly created resource in storage (Admin only)
      */
     public function store(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa hanya memiliki hak akses melihat stok (read-only).'
+            ], 403);
+        }
+
         if ($request->has('price') && !$request->has('hjual')) {
             $request->merge(['hjual' => $request->input('price')]);
         }
@@ -50,8 +90,17 @@ class MasterStockController extends Controller
             [
                 'price' => $stock->hjual,
                 'stock' => $stock->stock ?? 0,
+                'kdklp' => $stock->kdklp,
             ]
         );
+
+        // Ensure all users have this stock initialized
+        foreach (User::all() as $u) {
+            UserStock::firstOrCreate(
+                ['user_id' => $u->id, 'tyunit' => $stock->TYUNIT],
+                ['kdklp' => $stock->kdklp, 'kuota' => 0, 'stock' => 0]
+            );
+        }
 
         return new MasterStockResource($stock);
     }
@@ -66,10 +115,18 @@ class MasterStockController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified resource in storage (Admin only)
      */
     public function update(Request $request, string $id)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa hanya memiliki hak akses melihat stok (read-only).'
+            ], 403);
+        }
+
         $stock = MasterStock::findOrFail($id);
 
         if ($request->has('price') && !$request->has('hjual')) {
@@ -111,127 +168,116 @@ class MasterStockController extends Controller
             }
         }
 
-        // If setting kuota, sync to all items in group
         if (isset($validated['kuota']) && !empty($stock->kdklp)) {
             $newKuota = (int) $validated['kuota'];
             MasterStock::where('kdklp', $stock->kdklp)->update(['kuota' => $newKuota]);
             Product::where('kdklp', $stock->kdklp)->update(['kuota' => $newKuota]);
         }
 
-        $stock->refresh();
         return new MasterStockResource($stock);
     }
 
     /**
-     * Dedicated stock update endpoint
+     * Flexible Stock Update Endpoint (Admin only)
      */
     public function updateStock(Request $request)
     {
-        $kdklp = $request->input('kdklp', $request->input('category', $request->input('group')));
-        $tyunit = $request->input('tyunit', $request->input('TYUNIT', $request->input('id')));
-        $stock = $request->input('stock', $request->input('quantity', $request->input('qty')));
-        $kuota = $request->input('kuota', $request->input('quota'));
-        $mode = $request->input('mode', 'set'); // 'set' or 'add'
-        $resetSales = $request->boolean('reset_sales', false);
-
-        // 1. Setting Group Quota (e.g. GALON = 100)
-        if (!empty($kdklp) || $kuota !== null) {
-            $targetGroup = strtoupper(trim($kdklp ?: 'GALON'));
-            $groupQuery = MasterStock::where('kdklp', $targetGroup);
-            if ($groupQuery->count() === 0) {
-                $found = MasterStock::where('kdklp', 'LIKE', "%{$targetGroup}%")->first();
-                if ($found) {
-                    $targetGroup = $found->kdklp;
-                }
-            }
-
-            $kuotaVal = (int) ($kuota ?? $stock ?? 0);
-            MasterStock::where('kdklp', $targetGroup)->update(['kuota' => $kuotaVal]);
-            Product::where('kdklp', $targetGroup)->update(['kuota' => $kuotaVal]);
-
-            if ($resetSales || $request->has('reset')) {
-                MasterStock::where('kdklp', $targetGroup)->update(['stock' => 0]);
-                Product::where('kdklp', $targetGroup)->update(['stock' => 0]);
-            }
-
-            $totalTerjual = (int) MasterStock::where('kdklp', $targetGroup)->sum('stock');
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
             return response()->json([
-                'success' => true,
-                'message' => "Kuota untuk kelompok {$targetGroup} berhasil diset ke {$kuotaVal} unit",
-                'group' => $targetGroup,
-                'kuota' => $kuotaVal,
-                'total_terjual' => $totalTerjual,
-                'sisa_kuota' => max(0, $kuotaVal - $totalTerjual),
-                'items_count' => MasterStock::where('kdklp', $targetGroup)->count(),
-            ]);
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa hanya memiliki hak akses melihat stok (read-only).'
+            ], 403);
         }
 
-        if (is_numeric($tyunit)) {
-            $tyunit = sprintf('BV%02d', $tyunit);
+        if ($request->has('kdklp') || $request->has('category') || $request->has('kelompok')) {
+            return $this->setStockAwal($request);
         }
+
+        $validated = $request->validate([
+            'id'       => 'sometimes|numeric',
+            'tyunit'   => 'sometimes|string',
+            'stock'    => 'sometimes|numeric',
+            'kuota'    => 'sometimes|numeric',
+            'price'    => 'sometimes|numeric',
+            'name'     => 'sometimes|string',
+        ]);
 
         $m = null;
-        if ($tyunit) {
-            $m = MasterStock::find($tyunit);
-        }
-        if (!$m && $request->has('name')) {
-            $name = $request->input('name');
-            $m = MasterStock::where('NTYUNIT', $name)->first();
-            if (!$m) {
-                $m = MasterStock::where('NTYUNIT', 'LIKE', "%{$name}%")->first();
-            }
+        if (!empty($validated['tyunit'])) {
+            $m = MasterStock::find($validated['tyunit']);
+        } elseif (!empty($validated['id'])) {
+            $code = sprintf('BV%02d', $validated['id']);
+            $m = MasterStock::find($code);
+        } elseif (!empty($validated['name'])) {
+            $m = MasterStock::where('NTYUNIT', $validated['name'])->first();
         }
 
         if (!$m) {
-            return response()->json(['success' => false, 'message' => "Item {$tyunit} tidak ditemukan"], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Product atau MasterStock tidak ditemukan'
+            ], 404);
         }
 
-        // 2. Update individual product stock / sales count
-        if ($stock !== null) {
-            $stockValue = (int) $stock;
-            if ($mode === 'add') {
-                $m->stock += $stockValue;
+        if (isset($validated['kuota'])) {
+            $kuotaVal = (int) $validated['kuota'];
+            if (!empty($m->kdklp)) {
+                MasterStock::where('kdklp', $m->kdklp)->update(['kuota' => $kuotaVal]);
+                Product::where('kdklp', $m->kdklp)->update(['kuota' => $kuotaVal]);
             } else {
-                $m->stock = $stockValue;
+                $m->kuota = $kuotaVal;
+                $m->save();
             }
-            $m->tglup = now();
+        }
+
+        if (isset($validated['stock'])) {
+            $m->stock = (int) $validated['stock'];
             $m->save();
             Product::where('name', $m->NTYUNIT)->update(['stock' => $m->stock]);
+        }
+
+        if (isset($validated['price'])) {
+            $m->hjual = $validated['price'];
+            $m->save();
+            Product::where('name', $m->NTYUNIT)->update(['price' => $m->hjual]);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Stock berhasil diperbarui',
-            'data' => new MasterStockResource($m)
+            'data'    => new MasterStockResource($m)
         ]);
     }
 
     /**
-     * Get grouped stock summary
-     */
-    public function stockGroups()
-    {
-        return $this->stockSummary();
-    }
-
-    /**
-     * Set Stok Awal / Kuota Komoditas
-     * Endpoint: POST /api/stock-awal
+     * Set Stok Awal / Kuota Komoditas (Admin only)
+     * POST /api/stock-awal
      */
     public function setStockAwal(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa hanya memiliki hak akses melihat stok (read-only). Pengelolaan stok hanya dapat dilakukan oleh Admin.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'kelompok'      => 'sometimes|string',
             'kdklp'         => 'sometimes|string',
             'category'      => 'sometimes|string',
             'kuota'         => 'sometimes|numeric|min:0',
             'stock_awal'    => 'sometimes|numeric|min:0',
+            'user_id'       => 'sometimes|nullable|exists:users,id',
             'reset_terjual' => 'sometimes|boolean',
         ]);
 
         $group = strtoupper(trim($validated['kelompok'] ?? $validated['kdklp'] ?? $validated['category'] ?? 'GALON'));
         $kuotaVal = (int) ($validated['stock_awal'] ?? $validated['kuota'] ?? 0);
         $resetTerjual = $request->boolean('reset_terjual', false);
+        $targetUserId = $validated['user_id'] ?? null;
 
         // Fuzzy match nama kelompok
         $match = MasterStock::where('kdklp', $group)->first();
@@ -242,16 +288,59 @@ class MasterStockController extends Controller
             } else {
                 return response()->json([
                     'success' => false,
-                    'message' => "Kelompok {$group} tidak ditemukan. Pilihan kelompok yang tersedia: GALON, BOTOL_600, BOTOL_1500, GELAS."
+                    'message' => "Kelompok {$group} tidak ditemukan. Pilihan kelompok: GALON, BOTOL_600, BOTOL_1500, GELAS."
                 ], 404);
             }
         }
 
-        // Set kuota awal
+        if ($targetUserId) {
+            // Set stock awal for a specific sales user
+            UserStock::initializeForUser($targetUserId);
+            UserStock::where('user_id', $targetUserId)
+                ->where('kdklp', $group)
+                ->update(['kuota' => $kuotaVal]);
+
+            if ($resetTerjual) {
+                UserStock::where('user_id', $targetUserId)
+                    ->where('kdklp', $group)
+                    ->update(['stock' => 0]);
+            }
+
+            $user = User::find($targetUserId);
+            $totalTerjual = (int) UserStock::where('user_id', $targetUserId)->where('kdklp', $group)->sum('stock');
+            $sisaStock = max(0, $kuotaVal - $totalTerjual);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Stok awal {$group} untuk user {$user->name} ({$user->username}) berhasil diset ke {$kuotaVal} unit",
+                'data' => [
+                    'user_id'       => $user->id,
+                    'user_name'     => $user->name,
+                    'kelompok'      => $group,
+                    'stock_awal'    => $kuotaVal,
+                    'total_terjual' => $totalTerjual,
+                    'sisa_stock'    => $sisaStock,
+                    'reset_terjual' => $resetTerjual,
+                ]
+            ]);
+        }
+
+        // Set global stock awal (updates master and sets default quota for all sales users)
         MasterStock::where('kdklp', $group)->update(['kuota' => $kuotaVal, 'tglup' => now()]);
         Product::where('kdklp', $group)->update(['kuota' => $kuotaVal]);
 
-        // Opsi reset counter terjual ke 0 (biasanya untuk awal hari baru)
+        foreach (User::where('role', 'user')->get() as $salesUser) {
+            UserStock::initializeForUser($salesUser->id);
+            UserStock::where('user_id', $salesUser->id)
+                ->where('kdklp', $group)
+                ->update(['kuota' => $kuotaVal]);
+            if ($resetTerjual) {
+                UserStock::where('user_id', $salesUser->id)
+                    ->where('kdklp', $group)
+                    ->update(['stock' => 0]);
+            }
+        }
+
         if ($resetTerjual) {
             MasterStock::where('kdklp', $group)->update(['stock' => 0]);
             Product::where('kdklp', $group)->update(['stock' => 0]);
@@ -262,7 +351,7 @@ class MasterStockController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "Stok awal untuk kelompok {$group} berhasil diset ke {$kuotaVal} unit",
+            'message' => "Stok awal kelompok {$group} berhasil diset ke {$kuotaVal} unit untuk semua sales",
             'data' => [
                 'kelompok'      => $group,
                 'stock_awal'    => $kuotaVal,
@@ -276,10 +365,43 @@ class MasterStockController extends Controller
 
     /**
      * Get Daftar Stok Awal per Kelompok
-     * Endpoint: GET /api/stock-awal
+     * GET /api/stock-awal
      */
-    public function getStockAwal()
+    public function getStockAwal(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        $targetUserId = ($currentUser && !$currentUser->isAdmin())
+            ? $currentUser->id
+            : ($request->input('user_id') ?? null);
+
+        if ($targetUserId) {
+            UserStock::initializeForUser($targetUserId);
+            $groups = UserStock::where('user_id', $targetUserId)
+                ->select('kdklp')
+                ->distinct()
+                ->whereNotNull('kdklp')
+                ->get()
+                ->map(function ($row) use ($targetUserId) {
+                    $items = UserStock::where('user_id', $targetUserId)->where('kdklp', $row->kdklp)->get();
+                    $first = $items->first();
+                    $stockAwal = $first ? (int) $first->kuota : 0;
+                    $totalTerjual = (int) $items->sum('stock');
+                    $sisaStock = $stockAwal > 0 ? max(0, $stockAwal - $totalTerjual) : 0;
+
+                    return [
+                        'user_id'       => $targetUserId,
+                        'kelompok'      => $row->kdklp,
+                        'stock_awal'    => $stockAwal,
+                        'total_terjual' => $totalTerjual,
+                        'sisa_stock'    => $sisaStock,
+                        'jumlah_produk' => $items->count(),
+                    ];
+                });
+
+            return response()->json($groups);
+        }
+
+        // Global / Admin view
         $groups = MasterStock::select('kdklp')
             ->distinct()
             ->whereNotNull('kdklp')
@@ -305,10 +427,42 @@ class MasterStockController extends Controller
 
     /**
      * Get Rincian Stok Terjual per Produk
-     * Endpoint: GET /api/stock-terjual
+     * GET /api/stock-terjual
      */
     public function getStockTerjual(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        $targetUserId = ($currentUser && !$currentUser->isAdmin())
+            ? $currentUser->id
+            : ($request->input('user_id') ?? null);
+
+        if ($targetUserId) {
+            UserStock::initializeForUser($targetUserId);
+            $query = UserStock::with('masterStock')->where('user_id', $targetUserId);
+            if ($request->has('kelompok')) {
+                $query->where('kdklp', strtoupper($request->kelompok));
+            }
+
+            $items = $query->get()->map(function ($us) use ($targetUserId) {
+                return [
+                    'user_id'     => $targetUserId,
+                    'tyunit'      => $us->tyunit,
+                    'nama_produk' => $us->masterStock ? $us->masterStock->NTYUNIT : $us->tyunit,
+                    'kelompok'    => $us->kdklp,
+                    'harga'       => $us->masterStock ? (int) $us->masterStock->hjual : 0,
+                    'terjual'     => (int) $us->stock,
+                    'tglup'       => $us->updated_at,
+                ];
+            });
+
+            return response()->json([
+                'user_id'                   => $targetUserId,
+                'total_terjual_keseluruhan' => $items->sum('terjual'),
+                'items'                     => $items,
+            ]);
+        }
+
+        // Global / Admin view
         $query = MasterStock::query();
         if ($request->has('kelompok')) {
             $query->where('kdklp', strtoupper($request->kelompok));
@@ -325,30 +479,51 @@ class MasterStockController extends Controller
             ];
         });
 
-        $totalTerjualSemua = $items->sum('terjual');
-
         return response()->json([
-            'total_terjual_keseluruhan' => $totalTerjualSemua,
+            'total_terjual_keseluruhan' => $items->sum('terjual'),
             'items'                     => $items,
         ]);
     }
 
     /**
-     * Reset Counter Stok Terjual (misal Tutup Buku / Awal Hari)
-     * Endpoint: POST /api/stock-terjual/reset
+     * Reset Counter Stok Terjual (Admin only)
+     * POST /api/stock-terjual/reset
      */
     public function resetStockTerjual(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa tidak memiliki izin mereset counter stok terjual. Hanya Admin yang diizinkan.'
+            ], 403);
+        }
+
         $group = $request->input('kelompok', $request->input('kdklp'));
+        $targetUserId = $request->input('user_id');
+
+        if ($targetUserId) {
+            $q = UserStock::where('user_id', $targetUserId);
+            if ($group) $q->where('kdklp', strtoupper(trim($group)));
+            $q->update(['stock' => 0]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Counter stok terjual untuk user ID {$targetUserId} berhasil direset ke 0"
+            ]);
+        }
+
         if ($group) {
             $group = strtoupper(trim($group));
             MasterStock::where('kdklp', $group)->update(['stock' => 0]);
             Product::where('kdklp', $group)->update(['stock' => 0]);
-            $msg = "Counter stok terjual untuk kelompok {$group} berhasil direset ke 0";
+            UserStock::where('kdklp', $group)->update(['stock' => 0]);
+            $msg = "Counter stok terjual untuk kelompok {$group} berhasil direset ke 0 untuk semua user";
         } else {
             MasterStock::query()->update(['stock' => 0]);
             Product::query()->update(['stock' => 0]);
-            $msg = "Seluruh counter stok terjual semua produk berhasil direset ke 0";
+            UserStock::query()->update(['stock' => 0]);
+            $msg = "Seluruh counter stok terjual semua produk berhasil direset ke 0 untuk semua user";
         }
 
         return response()->json([
@@ -359,10 +534,63 @@ class MasterStockController extends Controller
 
     /**
      * Ringkasan Komprehensif (Stok Awal, Terjual, Sisa)
-     * Endpoint: GET /api/stock-summary
+     * GET /api/stock-summary
      */
-    public function stockSummary()
+    public function stockSummary(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        $targetUserId = ($currentUser && !$currentUser->isAdmin())
+            ? $currentUser->id
+            : ($request->input('user_id') ?? null);
+
+        if ($targetUserId) {
+            UserStock::initializeForUser($targetUserId);
+            $user = User::find($targetUserId);
+
+            $groups = UserStock::where('user_id', $targetUserId)
+                ->select('kdklp')
+                ->distinct()
+                ->whereNotNull('kdklp')
+                ->get()
+                ->map(function ($row) use ($targetUserId) {
+                    $items = UserStock::with('masterStock')
+                        ->where('user_id', $targetUserId)
+                        ->where('kdklp', $row->kdklp)
+                        ->get();
+
+                    $first = $items->first();
+                    $stockAwal = $first ? (int) $first->kuota : 0;
+                    $totalTerjual = (int) $items->sum('stock');
+                    $sisaStock = $stockAwal > 0 ? max(0, $stockAwal - $totalTerjual) : 0;
+
+                    return [
+                        'kelompok'       => $row->kdklp,
+                        'stock_awal'     => $stockAwal,
+                        'total_terjual'  => $totalTerjual,
+                        'sisa_stock'     => $sisaStock,
+                        'jumlah_produk'  => $items->count(),
+                        'rincian_produk' => $items->map(function ($us) {
+                            return [
+                                'tyunit'      => $us->tyunit,
+                                'nama_produk' => $us->masterStock ? $us->masterStock->NTYUNIT : $us->tyunit,
+                                'harga'       => $us->masterStock ? (int) $us->masterStock->hjual : 0,
+                                'terjual'     => (int) $us->stock,
+                            ];
+                        })
+                    ];
+                });
+
+            return response()->json([
+                'user'   => [
+                    'id'       => $user ? $user->id : $targetUserId,
+                    'name'     => $user ? $user->name : 'Sales',
+                    'username' => $user ? $user->username : '',
+                ],
+                'groups' => $groups,
+            ]);
+        }
+
+        // Global view
         $groups = MasterStock::select('kdklp')
             ->distinct()
             ->whereNotNull('kdklp')
@@ -394,11 +622,24 @@ class MasterStockController extends Controller
         return response()->json($groups);
     }
 
+    public function stockGroups(Request $request)
+    {
+        return $this->stockSummary($request);
+    }
+
     /**
-     * Batch sync endpoint
+     * Batch sync endpoint (Admin only)
      */
     public function sync(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: User biasa hanya memiliki hak akses melihat stok (read-only).'
+            ], 403);
+        }
+
         $items = $request->all();
         if (isset($items['items'])) {
             $items = $items['items'];
@@ -431,12 +672,7 @@ class MasterStockController extends Controller
             if ($m) {
                 if ($stock !== null) {
                     $stockVal = (int) $stock;
-                    if (!empty($m->kdklp)) {
-                        MasterStock::where('kdklp', $m->kdklp)->update(['stock' => $stockVal, 'tglup' => now()]);
-                        Product::where('kdklp', $m->kdklp)->update(['stock' => $stockVal]);
-                    } else {
-                        $m->stock = $stockVal;
-                    }
+                    $m->stock = $stockVal;
                 }
                 if ($price !== null) $m->hjual = $price;
                 if ($name !== null) $m->NTYUNIT = $name;
@@ -453,11 +689,20 @@ class MasterStockController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Remove the specified resource from storage (Admin only)
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        if ($currentUser && !$currentUser->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak: Hanya Admin yang dapat menghapus produk.'
+            ], 403);
+        }
+
         $stock = MasterStock::findOrFail($id);
+        UserStock::where('tyunit', $stock->TYUNIT)->delete();
         $stock->delete();
 
         return response()->json([

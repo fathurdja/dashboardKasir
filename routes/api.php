@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MasterStockController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\TransactionController;
@@ -11,43 +12,58 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Base URL: https://laravel.fathurrzqn8n.web.id/api
 |
-| 1. STOK AWAL (KUOTA KOMODITAS):
+| 1. AUTENTIKASI & MULTI-USER:
+|    - POST /api/login
+|    - POST /api/logout
+|    - GET  /api/me
+|    - GET  /api/users (Admin only)
+|
+| 2. STOK AWAL (KUOTA KOMODITAS):
 |    - GET  /api/stock-awal
-|    - POST /api/stock-awal
+|    - POST /api/stock-awal (Admin only)
 |
-| 2. STOK TERJUAL (PENJUALAN PER VARIAN):
+| 3. STOK TERJUAL (PENJUALAN PER VARIAN):
 |    - GET  /api/stock-terjual
-|    - POST /api/stock-terjual/reset
+|    - POST /api/stock-terjual/reset (Admin only)
 |
-| 3. RINGKASAN STOK (Stok Awal, Terjual, Sisa):
+| 4. RINGKASAN STOK (Stok Awal, Terjual, Sisa):
 |    - GET  /api/stock-summary
 |    - GET  /api/stock-groups
 |
-| 4. TRANSAKSI (CHECKOUT KASIR):
+| 5. TRANSAKSI (CHECKOUT KASIR):
 |    - GET    /api/transaksi
 |    - POST   /api/transaksi
 |    - GET    /api/transaksi/{id}
+|    - PUT    /api/transaksi/{id}
 |    - DELETE /api/transaksi/{id}
 |
-| 5. PRODUK & MASTER STOCKS:
+| 6. PRODUK & MASTER STOCKS:
 |    - GET  /api/products
 |    - GET  /api/master-stocks
 */
 
 // ==========================================
-// 1. STOK AWAL / KUOTA KOMODITAS
+// 1. AUTENTIKASI & MULTI-USER
+// ==========================================
+Route::post('login', [AuthController::class, 'login']);
+Route::post('logout', [AuthController::class, 'logout']);
+Route::get('me', [AuthController::class, 'me']);
+Route::get('users', [AuthController::class, 'users']);
+
+// ==========================================
+// 2. STOK AWAL / KUOTA KOMODITAS
 // ==========================================
 Route::get('stock-awal', [MasterStockController::class, 'getStockAwal']);
 Route::post('stock-awal', [MasterStockController::class, 'setStockAwal']);
 
 // ==========================================
-// 2. STOK TERJUAL / PENJUALAN PER VARIAN
+// 3. STOK TERJUAL / PENJUALAN PER VARIAN
 // ==========================================
 Route::get('stock-terjual', [MasterStockController::class, 'getStockTerjual']);
 Route::post('stock-terjual/reset', [MasterStockController::class, 'resetStockTerjual']);
 
 // ==========================================
-// 3. RINGKASAN STOK (Stok Awal vs Terjual vs Sisa)
+// 4. RINGKASAN STOK (Stok Awal vs Terjual vs Sisa)
 // ==========================================
 Route::get('stock-summary', [MasterStockController::class, 'stockSummary']);
 Route::get('stock-groups', [MasterStockController::class, 'stockGroups']);
@@ -55,7 +71,7 @@ Route::get('stocks/groups', [MasterStockController::class, 'stockGroups']);
 Route::get('stocks/categories', [MasterStockController::class, 'stockGroups']);
 
 // ==========================================
-// 4. TRANSAKSI / KASIR CHECKOUT
+// 5. TRANSAKSI / KASIR CHECKOUT
 // ==========================================
 Route::prefix('transaksi')->group(function () {
     Route::get('/', [TransactionController::class, 'index']);
@@ -66,7 +82,7 @@ Route::prefix('transaksi')->group(function () {
 });
 
 // ==========================================
-// 5. MASTER DATA & COMPATIBILITY ENDPOINTS
+// 6. MASTER DATA & COMPATIBILITY ENDPOINTS
 // ==========================================
 Route::apiResource('products', ProductController::class);
 Route::apiResource('master-stocks', MasterStockController::class);

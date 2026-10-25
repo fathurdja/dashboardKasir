@@ -7,48 +7,115 @@ use App\Models\MasterStock;
 use App\Models\Product;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
+use App\Models\User;
+use App\Models\UserStock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
-    // GET
-    public function index()
+    /**
+     * GET /api/transaksi
+     * Admin: view all transactions (optional filter ?user_id=X)
+     * Regular User: view ONLY their own transactions
+     */
+    public function index(Request $request)
     {
-        return Transaction::with('items')
-            ->orderBy('tanggal', 'desc')
-            ->get();
+        $currentUser = AuthController::resolveCurrentUser($request);
+
+        $query = Transaction::with(['items', 'user:id,name,username,email,role'])
+            ->orderBy('tanggal', 'desc');
+
+        if ($currentUser) {
+            if (!$currentUser->isAdmin()) {
+                // Regular user can only view their own transactions
+                $query->where('user_id', $currentUser->id);
+            } elseif ($request->filled('user_id')) {
+                // Admin filtering by user_id
+                $query->where('user_id', $request->input('user_id'));
+            }
+        } elseif ($request->filled('user_id')) {
+            // Unauthenticated with query param
+            $query->where('user_id', $request->input('user_id'));
+        }
+
+        return response()->json($query->get());
     }
 
-    // GET by ID
-    public function show($id)
+    /**
+     * GET /api/transaksi/{id}
+     */
+    public function show(Request $request, $id)
     {
-        return Transaction::with('items')
+        $currentUser = AuthController::resolveCurrentUser($request);
+
+        $trx = Transaction::with(['items', 'user:id,name,username,email,role'])
             ->where('id_transaksi', $id)
             ->firstOrFail();
+
+        if ($currentUser && !$currentUser->isAdmin()) {
+            if ($trx->user_id && $trx->user_id != $currentUser->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akses ditolak: Anda tidak memiliki akses ke nota transaksi ini'
+                ], 403);
+            }
+        }
+
+        return response()->json($trx);
     }
 
-    // POST
+    /**
+     * POST /api/transaksi
+     * Creates transaction and updates user & master stocks
+     */
     public function store(Request $request)
     {
         try {
             $validated = $request->validate([
-                'id_transaksi' => 'required|string',
-                'customerName' => 'required|string',
-                'alamat' => 'required|string',
-                'date' => 'required|date',
-                'total' => 'required|numeric',
-                'status' => 'required|string',
+                'id_transaksi'     => 'required|string',
+                'customerName'     => 'required|string',
+                'alamat'           => 'required|string',
+                'date'             => 'required|date',
+                'total'            => 'required|numeric',
+                'status'           => 'required|string',
+                'user_id'          => 'sometimes|nullable|exists:users,id',
+                'user_name'        => 'sometimes|nullable|string',
 
-                'items' => 'required|array|min:1',
-                'items.*.tyunit' => 'required|string|exists:munit,TYUNIT',
-                'items.*.price' => 'required|numeric',
+                'items'            => 'required|array|min:1',
+                'items.*.tyunit'   => 'required|string|exists:munit,TYUNIT',
+                'items.*.price'    => 'required|numeric',
                 'items.*.quantity' => 'required|integer|min:1',
-                'items.*.bonus' => 'required|integer|min:0',
+                'items.*.bonus'    => 'required|integer|min:0',
                 'items.*.subtotal' => 'required|numeric|min:0',
             ]);
 
-            DB::transaction(function () use ($validated) {
+            // Resolve acting user
+            $currentUser = AuthController::resolveCurrentUser($request);
+            $userId = null;
+            $userName = null;
+
+            if ($currentUser) {
+                $userId = $currentUser->id;
+                $userName = $currentUser->name;
+            } elseif (!empty($validated['user_id'])) {
+                $targetUser = User::find($validated['user_id']);
+                if ($targetUser) {
+                    $userId = $targetUser->id;
+                    $userName = $targetUser->name;
+                }
+            } else {
+                // Default to admin/system if completely unauthenticated
+                $admin = User::where('role', 'admin')->first();
+                $userId = $admin ? $admin->id : 1;
+                $userName = $admin ? $admin->name : 'Admin';
+            }
+
+            if ($userId) {
+                UserStock::initializeForUser($userId);
+            }
+
+            DB::transaction(function () use ($validated, $userId, $userName) {
 
                 // 1. Group required quantities and resolve items
                 $groupSalesNeeded = [];
@@ -77,33 +144,64 @@ class TransactionController extends Controller
                     $groupSalesNeeded[$groupKey]['needed'] += $totalKeluar;
 
                     $resolvedItems[] = [
-                        'item'   => $item,
-                        'barang' => $barang,
+                        'item'        => $item,
+                        'barang'      => $barang,
                         'totalKeluar' => $totalKeluar,
                     ];
                 }
 
-                // 2. Validate Quota (if kuota is configured > 0)
-                foreach ($groupSalesNeeded as $groupKey => $info) {
-                    if (!empty($info['kdklp'])) {
-                        $kuota = (int) MasterStock::where('kdklp', $info['kdklp'])->value('kuota');
-                        if ($kuota > 0) {
-                            $currentSold = (int) MasterStock::where('kdklp', $info['kdklp'])->sum('stock');
-                            $newTotal = $currentSold + $info['needed'];
-                            if ($newTotal > $kuota) {
-                                $sisaKuota = max(0, $kuota - $currentSold);
-                                throw new \Exception("Total penjualan {$info['name']} ({$newTotal}) melebihi kuota {$kuota}. Sisa kuota tersedia: {$sisaKuota} unit");
+                // 2. Validate Quota against UserStock (if user has quota assigned)
+                if ($userId) {
+                    foreach ($groupSalesNeeded as $groupKey => $info) {
+                        if (!empty($info['kdklp'])) {
+                            $userKuota = (int) UserStock::where('user_id', $userId)
+                                ->where('kdklp', $info['kdklp'])
+                                ->value('kuota');
+
+                            if ($userKuota > 0) {
+                                $currentSold = (int) UserStock::where('user_id', $userId)
+                                    ->where('kdklp', $info['kdklp'])
+                                    ->sum('stock');
+
+                                $newTotal = $currentSold + $info['needed'];
+                                if ($newTotal > $userKuota) {
+                                    $sisaKuota = max(0, $userKuota - $currentSold);
+                                    throw new \Exception("Stok {$info['name']} Anda ({$userName}) tidak mencukupi. Sisa kuota tersedia: {$sisaKuota} unit (dibutuhkan: {$info['needed']} unit)");
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback: Validate Global Quota
+                    foreach ($groupSalesNeeded as $groupKey => $info) {
+                        if (!empty($info['kdklp'])) {
+                            $kuota = (int) MasterStock::where('kdklp', $info['kdklp'])->value('kuota');
+                            if ($kuota > 0) {
+                                $currentSold = (int) MasterStock::where('kdklp', $info['kdklp'])->sum('stock');
+                                $newTotal = $currentSold + $info['needed'];
+                                if ($newTotal > $kuota) {
+                                    $sisaKuota = max(0, $kuota - $currentSold);
+                                    throw new \Exception("Total penjualan {$info['name']} ({$newTotal}) melebihi kuota {$kuota}. Sisa kuota tersedia: {$sisaKuota} unit");
+                                }
                             }
                         }
                     }
                 }
 
-                // 3. Update individual product sales count (stock)
+                // 3. Update UserStock and Global Stock
                 foreach ($resolvedItems as $r) {
                     $item = $r['item'];
                     $barang = $r['barang'];
                     $totalKeluar = $r['totalKeluar'];
 
+                    // A. Update UserStock
+                    if ($userId) {
+                        UserStock::where('user_id', $userId)
+                            ->where('tyunit', $item['tyunit'])
+                            ->increment('stock', $totalKeluar);
+                    }
+
+                    // B. Update Global MasterStock & Product
                     MasterStock::where('TYUNIT', $item['tyunit'])->increment('stock', $totalKeluar);
 
                     $prodId = str_starts_with($item['tyunit'], 'BV') ? (int) substr($item['tyunit'], 2) : null;
@@ -111,9 +209,11 @@ class TransactionController extends Controller
                     $prodQuery->increment('stock', $totalKeluar);
                 }
 
-                // 4. Create Transaction record
+                // 4. Create Transaction record with user association
                 $trx = Transaction::create([
                     'id_transaksi'  => $validated['id_transaksi'],
+                    'user_id'       => $userId,
+                    'user_name'     => $userName,
                     'customer_name' => $validated['customerName'],
                     'alamat'        => $validated['alamat'],
                     'tanggal'       => $validated['date'],
@@ -138,14 +238,15 @@ class TransactionController extends Controller
                 }
             });
 
-
-
             return response()->json([
                 'success' => true,
-                'message' => 'Transaksi berhasil disimpan'
+                'message' => 'Transaksi berhasil disimpan',
+                'user'    => [
+                    'id'   => $userId,
+                    'name' => $userName,
+                ]
             ], 201);
         } catch (\Throwable $e) {
-
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -153,34 +254,64 @@ class TransactionController extends Controller
         }
     }
 
-
-
-
-
-    // UPDATE
+    /**
+     * PUT /api/transaksi/{id}
+     */
     public function update(Request $request, $id)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
         $trx = Transaction::where('id_transaksi', $id)->firstOrFail();
 
+        if ($currentUser && !$currentUser->isAdmin()) {
+            if ($trx->user_id && $trx->user_id != $currentUser->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akses ditolak: Anda tidak memiliki akses untuk mengubah transaksi ini'
+                ], 403);
+            }
+        }
+
         $trx->update([
-            'customer_name' => $request->customer_name,
-            'alamat' => $request->alamat,
-            'status' => $request->status,
+            'customer_name' => $request->customer_name ?? $trx->customer_name,
+            'alamat'        => $request->alamat ?? $trx->alamat,
+            'status'        => $request->status ?? $trx->status,
         ]);
 
         return response()->json(['message' => 'Transaksi berhasil diupdate']);
     }
 
-    // DELETE
-    public function destroy($id)
+    /**
+     * DELETE /api/transaksi/{id}
+     */
+    public function destroy(Request $request, $id)
     {
-        DB::transaction(function () use ($id) {
-            $trx = Transaction::with('items')->where('id_transaksi', $id)->firstOrFail();
+        $currentUser = AuthController::resolveCurrentUser($request);
+        $trx = Transaction::with('items')->where('id_transaksi', $id)->firstOrFail();
+
+        if ($currentUser && !$currentUser->isAdmin()) {
+            if ($trx->user_id && $trx->user_id != $currentUser->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akses ditolak: Anda tidak dapat menghapus transaksi user lain'
+                ], 403);
+            }
+        }
+
+        DB::transaction(function () use ($trx) {
+            $userId = $trx->user_id;
 
             foreach ($trx->items as $item) {
                 $totalReturn = (int) $item->quantity + (int) ($item->bonus ?? 0);
                 $barang = MasterStock::where('TYUNIT', $item->tyunit)->first();
                 if ($barang) {
+                    // Return user stock
+                    if ($userId) {
+                        UserStock::where('user_id', $userId)
+                            ->where('tyunit', $item->tyunit)
+                            ->decrement('stock', $totalReturn);
+                    }
+
+                    // Return global stock
                     MasterStock::where('TYUNIT', $item->tyunit)->decrement('stock', $totalReturn);
 
                     $prodId = str_starts_with($item->tyunit, 'BV') ? (int) substr($item->tyunit, 2) : null;
@@ -189,7 +320,7 @@ class TransactionController extends Controller
                 }
             }
 
-            TransactionItem::where('id_transaksi', $id)->delete();
+            TransactionItem::where('id_transaksi', $trx->id_transaksi)->delete();
             $trx->delete();
         });
 

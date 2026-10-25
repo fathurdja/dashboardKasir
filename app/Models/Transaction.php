@@ -15,6 +15,8 @@ class Transaction extends Model
 
     protected $fillable = [
         'id_transaksi',
+        'user_id',
+        'user_name',
         'customer_name',
         'alamat',
         'tanggal',
@@ -25,7 +27,11 @@ class Transaction extends Model
     protected $casts = [
         'tanggal' => 'datetime',
     ];
-    
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'id');
+    }
 
     public function items(): HasMany
     {
