@@ -85,20 +85,45 @@ class MasterStockController extends Controller
 
         $stock = MasterStock::create($validated);
 
-        Product::firstOrCreate(
-            ['name' => $stock->NTYUNIT],
-            [
+        if (empty($stock->kuota) && !empty($stock->kdklp)) {
+            $existingKuota = MasterStock::where('kdklp', $stock->kdklp)->where('TYUNIT', '!=', $stock->TYUNIT)->value('kuota') ?? 0;
+            if ($existingKuota > 0) {
+                $stock->kuota = $existingKuota;
+                $stock->save();
+            }
+        }
+
+        $prodId = str_starts_with($stock->TYUNIT, 'BV') ? (int) substr($stock->TYUNIT, 2) : null;
+        if ($prodId) {
+            Product::updateOrCreate(
+                ['id' => $prodId],
+                [
+                    'name'  => $stock->NTYUNIT,
+                    'price' => $stock->hjual,
+                    'stock' => $stock->stock ?? 0,
+                    'kuota' => $stock->kuota ?? 0,
+                    'kdklp' => $stock->kdklp,
+                ]
+            );
+        } else {
+            Product::create([
+                'name'  => $stock->NTYUNIT,
                 'price' => $stock->hjual,
                 'stock' => $stock->stock ?? 0,
+                'kuota' => $stock->kuota ?? 0,
                 'kdklp' => $stock->kdklp,
-            ]
-        );
+            ]);
+        }
 
         // Ensure all users have this stock initialized
         foreach (User::all() as $u) {
+            $userGroupKuota = UserStock::where('user_id', $u->id)
+                ->where('kdklp', $stock->kdklp)
+                ->value('kuota') ?? ($u->isAdmin() ? 0 : (int) ($stock->kuota ?? 0));
+
             UserStock::firstOrCreate(
                 ['user_id' => $u->id, 'tyunit' => $stock->TYUNIT],
-                ['kdklp' => $stock->kdklp, 'kuota' => 0, 'stock' => 0]
+                ['kdklp' => $stock->kdklp, 'kuota' => $userGroupKuota, 'stock' => 0]
             );
         }
 
@@ -155,7 +180,8 @@ class MasterStockController extends Controller
         $stock->update($validated);
 
         // Keep Product table synchronized
-        $product = Product::where('name', $stock->NTYUNIT)->first();
+        $prodId = str_starts_with($stock->TYUNIT, 'BV') ? (int) substr($stock->TYUNIT, 2) : null;
+        $product = $prodId ? Product::find($prodId) : Product::where('name', $stock->NTYUNIT)->first();
         if ($product) {
             $productUpdates = [];
             if (isset($validated['stock'])) $productUpdates['stock'] = (int) $stock->stock;
@@ -231,16 +257,19 @@ class MasterStockController extends Controller
             }
         }
 
+        $prodId = str_starts_with($m->TYUNIT, 'BV') ? (int) substr($m->TYUNIT, 2) : null;
+        $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $m->NTYUNIT);
+
         if (isset($validated['stock'])) {
             $m->stock = (int) $validated['stock'];
             $m->save();
-            Product::where('name', $m->NTYUNIT)->update(['stock' => $m->stock]);
+            $prodQuery->update(['stock' => $m->stock]);
         }
 
         if (isset($validated['price'])) {
             $m->hjual = $validated['price'];
             $m->save();
-            Product::where('name', $m->NTYUNIT)->update(['price' => $m->hjual]);
+            $prodQuery->update(['price' => $m->hjual]);
         }
 
         return response()->json([
@@ -678,7 +707,9 @@ class MasterStockController extends Controller
                 if ($name !== null) $m->NTYUNIT = $name;
                 $m->save();
 
-                Product::where('name', $m->NTYUNIT)->update([
+                $prodId = str_starts_with($m->TYUNIT, 'BV') ? (int) substr($m->TYUNIT, 2) : null;
+                $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $m->NTYUNIT);
+                $prodQuery->update([
                     'stock' => $m->stock,
                     'price' => $m->hjual,
                 ]);

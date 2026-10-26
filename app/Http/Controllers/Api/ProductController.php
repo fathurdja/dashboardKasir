@@ -72,8 +72,20 @@ class ProductController extends Controller
             'name'  => 'required|string|max:255',
             'kdklp' => 'nullable|string|max:50',
             'price' => 'required|numeric',
-            'stock' => 'required|numeric',
+            'stock' => 'nullable|numeric',
+            'kuota' => 'nullable|numeric',
         ]);
+
+        if (!isset($validated['stock'])) {
+            $validated['stock'] = 0;
+        }
+
+        if (!isset($validated['kuota']) && !empty($validated['kdklp'])) {
+            $existingKuota = Product::where('kdklp', $validated['kdklp'])->value('kuota')
+                ?? MasterStock::where('kdklp', $validated['kdklp'])->value('kuota')
+                ?? 0;
+            $validated['kuota'] = (int) $existingKuota;
+        }
 
         $product = Product::create($validated);
 
@@ -86,9 +98,26 @@ class ProductController extends Controller
                 'kdklp'   => $product->kdklp,
                 'hjual'   => $product->price,
                 'stock'   => (int) $product->stock,
+                'kuota'   => (int) ($product->kuota ?? 0),
                 'tglup'   => now(),
             ]
         );
+
+        // Ensure UserStock is initialized for all users
+        foreach (\App\Models\User::all() as $u) {
+            $userGroupKuota = UserStock::where('user_id', $u->id)
+                ->where('kdklp', $product->kdklp)
+                ->value('kuota') ?? ($u->isAdmin() ? 0 : (int) ($product->kuota ?? 0));
+
+            UserStock::firstOrCreate(
+                ['user_id' => $u->id, 'tyunit' => $code],
+                [
+                    'kdklp' => $product->kdklp,
+                    'kuota' => $userGroupKuota,
+                    'stock' => 0,
+                ]
+            );
+        }
 
         return response()->json($product, 201);
     }
