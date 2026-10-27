@@ -10,12 +10,37 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    /**
-     * GET /api/products
-     * Returns unified global products with quota, sold, and remaining stock
-     */
     public function index(Request $request)
     {
+        $currentUser = AuthController::resolveCurrentUser($request);
+        $targetUserId = ($currentUser && !$currentUser->isAdmin())
+            ? $currentUser->id
+            : ($request->input('user_id') ?? null);
+
+        if ($targetUserId) {
+            UserStock::initializeForUser($targetUserId);
+            $userStocks = UserStock::where('user_id', $targetUserId)->get()->keyBy('tyunit');
+
+            $products = Product::all()->map(function ($p) use ($userStocks, $targetUserId) {
+                $code = sprintf('BV%02d', $p->id);
+                $uStock = $userStocks->get($code);
+                $kuota = $uStock ? (int) $uStock->kuota : 0;
+                $soldGroup = !empty($p->kdklp)
+                    ? (int) UserStock::where('user_id', $targetUserId)->where('kdklp', $p->kdklp)->sum('stock')
+                    : ($uStock ? (int) $uStock->stock : 0);
+                $sisaKuota = $kuota > 0 ? max(0, $kuota - $soldGroup) : 0;
+
+                $arr = $p->toArray();
+                $arr['stock'] = $uStock ? (int) $uStock->stock : 0;
+                $arr['terjual'] = $uStock ? (int) $uStock->stock : 0;
+                $arr['kuota'] = $kuota;
+                $arr['sisa_kuota'] = $sisaKuota;
+                return $arr;
+            });
+
+            return response()->json($products);
+        }
+
         $products = Product::all()->map(function ($p) {
             $kuota = (int) ($p->kuota ?? 0);
             $totalTerjualGroup = !empty($p->kdklp)
@@ -33,16 +58,13 @@ class ProductController extends Controller
         return response()->json($products);
     }
 
-    /**
-     * POST /api/products (Admin only)
-     */
     public function store(Request $request)
     {
         $currentUser = AuthController::resolveCurrentUser($request);
         if ($currentUser && !$currentUser->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Akses ditolak: Hanya Admin yang diizinkan menambah produk baru'
+                'message' => 'Akses ditolak: User biasa tidak diizinkan menambah produk baru'
             ], 403);
         }
 
@@ -81,8 +103,21 @@ class ProductController extends Controller
             ]
         );
 
-        // Keep UserStock equalized for all users
-        UserStock::syncAllFromMasterStock();
+        // Ensure UserStock is initialized for all users
+        foreach (\App\Models\User::all() as $u) {
+            $userGroupKuota = UserStock::where('user_id', $u->id)
+                ->where('kdklp', $product->kdklp)
+                ->value('kuota') ?? ($u->isAdmin() ? 0 : (int) ($product->kuota ?? 0));
+
+            UserStock::firstOrCreate(
+                ['user_id' => $u->id, 'tyunit' => $code],
+                [
+                    'kdklp' => $product->kdklp,
+                    'kuota' => $userGroupKuota,
+                    'stock' => 0,
+                ]
+            );
+        }
 
         return response()->json($product, 201);
     }
@@ -92,16 +127,13 @@ class ProductController extends Controller
         return response()->json($product);
     }
 
-    /**
-     * PUT/PATCH /api/products/{id} (Admin only)
-     */
     public function update(Request $request, Product $product)
     {
         $currentUser = AuthController::resolveCurrentUser($request);
         if ($currentUser && !$currentUser->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Akses ditolak: Hanya Admin yang diizinkan mengubah produk atau stok'
+                'message' => 'Akses ditolak: User biasa tidak diizinkan mengubah produk'
             ], 403);
         }
 
@@ -137,28 +169,19 @@ class ProductController extends Controller
             MasterStock::where('kdklp', $product->kdklp)->update(['kuota' => $newKuota]);
         }
 
-        // Keep UserStock equalized for all users
-        UserStock::syncAllFromMasterStock();
-
         return response()->json($product);
     }
 
-    /**
-     * DELETE /api/products/{id} (Admin only)
-     */
     public function destroy(Request $request, Product $product)
     {
         $currentUser = AuthController::resolveCurrentUser($request);
         if ($currentUser && !$currentUser->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Akses ditolak: Hanya Admin yang diizinkan menghapus produk'
+                'message' => 'Akses ditolak: User biasa tidak diizinkan menghapus produk'
             ], 403);
         }
 
-        $code = sprintf('BV%02d', $product->id);
-        MasterStock::where('TYUNIT', $code)->orWhere('NTYUNIT', $product->name)->delete();
-        UserStock::where('tyunit', $code)->delete();
         $product->delete();
 
         return response()->json(['message' => 'Product deleted successfully']);

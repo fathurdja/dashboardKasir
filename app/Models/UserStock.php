@@ -30,33 +30,33 @@ class UserStock extends Model
     }
 
     /**
-     * Ensure all MasterStock products are seeded and synchronized with MasterStock
+     * Ensure all MasterStock products are seeded for this user
      */
     public static function initializeForUser($userId): void
     {
         $all = MasterStock::all();
         foreach ($all as $m) {
-            self::updateOrCreate(
+            self::firstOrCreate(
                 [
                     'user_id' => $userId,
                     'tyunit'  => $m->TYUNIT,
                 ],
                 [
                     'kdklp' => $m->kdklp,
-                    'kuota' => (int) ($m->kuota ?? 0),
-                    'stock' => (int) ($m->stock ?? 0),
+                    'kuota' => 0,
+                    'stock' => 0,
                 ]
             );
         }
     }
 
     /**
-     * Synchronize all users with MasterStock (Admin Input)
+     * Synchronize all users with MasterStock
      */
     public static function syncAllFromMasterStock(): void
     {
         $all = MasterStock::all();
-        $users = User::all();
+        $users = \App\Models\User::all();
         foreach ($users as $u) {
             foreach ($all as $m) {
                 self::updateOrCreate(

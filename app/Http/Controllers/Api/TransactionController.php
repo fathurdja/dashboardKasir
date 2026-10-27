@@ -67,7 +67,7 @@ class TransactionController extends Controller
 
     /**
      * POST /api/transaksi
-     * Creates transaction and updates centralized stock pool
+     * Creates transaction and updates user & master stocks
      */
     public function store(Request $request)
     {
@@ -111,6 +111,10 @@ class TransactionController extends Controller
                 $userName = $admin ? $admin->name : 'Admin';
             }
 
+            if ($userId) {
+                UserStock::initializeForUser($userId);
+            }
+
             DB::transaction(function () use ($validated, $userId, $userName) {
 
                 // 1. Group required quantities and resolve items
@@ -146,36 +150,63 @@ class TransactionController extends Controller
                     ];
                 }
 
-                // 2. Validate Quota against Centralized / Global Stock Pool
-                foreach ($groupSalesNeeded as $groupKey => $info) {
-                    if (!empty($info['kdklp'])) {
-                        $kuota = (int) MasterStock::where('kdklp', $info['kdklp'])->value('kuota');
-                        if ($kuota > 0) {
-                            $currentSold = (int) MasterStock::where('kdklp', $info['kdklp'])->sum('stock');
-                            $newTotal = $currentSold + $info['needed'];
-                            if ($newTotal > $kuota) {
-                                $sisaKuota = max(0, $kuota - $currentSold);
-                                throw new \Exception("Stok {$info['name']} tidak mencukupi. Sisa kuota tersedia: {$sisaKuota} unit (dibutuhkan: {$info['needed']} unit)");
+                // 2. Validate Quota against UserStock (if user has quota assigned)
+                if ($userId) {
+                    foreach ($groupSalesNeeded as $groupKey => $info) {
+                        if (!empty($info['kdklp'])) {
+                            $userKuota = (int) UserStock::where('user_id', $userId)
+                                ->where('kdklp', $info['kdklp'])
+                                ->value('kuota');
+
+                            if ($userKuota > 0) {
+                                $currentSold = (int) UserStock::where('user_id', $userId)
+                                    ->where('kdklp', $info['kdklp'])
+                                    ->sum('stock');
+
+                                $newTotal = $currentSold + $info['needed'];
+                                if ($newTotal > $userKuota) {
+                                    $sisaKuota = max(0, $userKuota - $currentSold);
+                                    throw new \Exception("Stok {$info['name']} Anda ({$userName}) tidak mencukupi. Sisa kuota tersedia: {$sisaKuota} unit (dibutuhkan: {$info['needed']} unit)");
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback: Validate Global Quota
+                    foreach ($groupSalesNeeded as $groupKey => $info) {
+                        if (!empty($info['kdklp'])) {
+                            $kuota = (int) MasterStock::where('kdklp', $info['kdklp'])->value('kuota');
+                            if ($kuota > 0) {
+                                $currentSold = (int) MasterStock::where('kdklp', $info['kdklp'])->sum('stock');
+                                $newTotal = $currentSold + $info['needed'];
+                                if ($newTotal > $kuota) {
+                                    $sisaKuota = max(0, $kuota - $currentSold);
+                                    throw new \Exception("Total penjualan {$info['name']} ({$newTotal}) melebihi kuota {$kuota}. Sisa kuota tersedia: {$sisaKuota} unit");
+                                }
                             }
                         }
                     }
                 }
 
-                // 3. Update Global Stock and UserStock
+                // 3. Update UserStock and Global Stock
                 foreach ($resolvedItems as $r) {
                     $item = $r['item'];
                     $barang = $r['barang'];
                     $totalKeluar = $r['totalKeluar'];
 
-                    // A. Update Global MasterStock & Product
+                    // A. Update UserStock
+                    if ($userId) {
+                        UserStock::where('user_id', $userId)
+                            ->where('tyunit', $item['tyunit'])
+                            ->increment('stock', $totalKeluar);
+                    }
+
+                    // B. Update Global MasterStock & Product
                     MasterStock::where('TYUNIT', $item['tyunit'])->increment('stock', $totalKeluar);
 
                     $prodId = str_starts_with($item['tyunit'], 'BV') ? (int) substr($item['tyunit'], 2) : null;
                     $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $barang->NTYUNIT);
                     $prodQuery->increment('stock', $totalKeluar);
-
-                    // B. Sync to all UserStock records so all users stay identical
-                    UserStock::where('tyunit', $item['tyunit'])->increment('stock', $totalKeluar);
                 }
 
                 // 4. Create Transaction record with user association
@@ -267,19 +298,25 @@ class TransactionController extends Controller
         }
 
         DB::transaction(function () use ($trx) {
+            $userId = $trx->user_id;
+
             foreach ($trx->items as $item) {
                 $totalReturn = (int) $item->quantity + (int) ($item->bonus ?? 0);
                 $barang = MasterStock::where('TYUNIT', $item->tyunit)->first();
                 if ($barang) {
+                    // Return user stock
+                    if ($userId) {
+                        UserStock::where('user_id', $userId)
+                            ->where('tyunit', $item->tyunit)
+                            ->decrement('stock', $totalReturn);
+                    }
+
                     // Return global stock
                     MasterStock::where('TYUNIT', $item->tyunit)->decrement('stock', $totalReturn);
 
                     $prodId = str_starts_with($item->tyunit, 'BV') ? (int) substr($item->tyunit, 2) : null;
                     $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $item->nama_barang);
                     $prodQuery->decrement('stock', $totalReturn);
-
-                    // Return user stock
-                    UserStock::where('tyunit', $item->tyunit)->decrement('stock', $totalReturn);
                 }
             }
 
