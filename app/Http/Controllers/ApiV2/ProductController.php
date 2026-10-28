@@ -16,7 +16,7 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $products = Product::all()->map(function ($p) {
+        $products = Product::ordered()->get()->map(function ($p) {
             $kuota = (int) ($p->kuota ?? 0);
             $totalTerjualGroup = !empty($p->kdklp)
                 ? (int) Product::where('kdklp', $p->kdklp)->sum('stock')

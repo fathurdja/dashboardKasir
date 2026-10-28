@@ -24,7 +24,7 @@ class MasterStockController extends Controller
             UserStock::initializeForUser($currentUser->id);
             $userStocks = UserStock::where('user_id', $currentUser->id)->get()->keyBy('tyunit');
 
-            $stocks = MasterStock::with('items')->get()->map(function ($m) use ($userStocks, $currentUser) {
+            $stocks = MasterStock::with('items')->ordered()->get()->map(function ($m) use ($userStocks, $currentUser) {
                 $uStock = $userStocks->get($m->TYUNIT);
                 $kuota = $uStock ? (int) $uStock->kuota : 0;
                 $soldGroup = !empty($m->kdklp)
@@ -48,7 +48,7 @@ class MasterStockController extends Controller
             return response()->json(['data' => $stocks]);
         }
 
-        $stocks = MasterStock::with('items')->get();
+        $stocks = MasterStock::with('items')->ordered()->get();
         return MasterStockResource::collection($stocks);
     }
 
@@ -434,9 +434,10 @@ class MasterStockController extends Controller
         $groups = MasterStock::select('kdklp')
             ->distinct()
             ->whereNotNull('kdklp')
+            ->orderByRaw("FIELD(kdklp, 'GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS')")
             ->get()
             ->map(function ($row) {
-                $items = MasterStock::where('kdklp', $row->kdklp)->get();
+                $items = MasterStock::where('kdklp', $row->kdklp)->ordered()->get();
                 $first = $items->first();
                 $stockAwal = $first ? (int) $first->kuota : 0;
                 $totalTerjual = (int) $items->sum('stock');
@@ -492,7 +493,7 @@ class MasterStockController extends Controller
         }
 
         // Global / Admin view
-        $query = MasterStock::query();
+        $query = MasterStock::ordered();
         if ($request->has('kelompok')) {
             $query->where('kdklp', strtoupper($request->kelompok));
         }
@@ -623,9 +624,10 @@ class MasterStockController extends Controller
         $groups = MasterStock::select('kdklp')
             ->distinct()
             ->whereNotNull('kdklp')
+            ->orderByRaw("FIELD(kdklp, 'GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS')")
             ->get()
             ->map(function ($row) {
-                $items = MasterStock::where('kdklp', $row->kdklp)->get();
+                $items = MasterStock::where('kdklp', $row->kdklp)->ordered()->get();
                 $first = $items->first();
                 $stockAwal = $first ? (int) $first->kuota : 0;
                 $totalTerjual = (int) $items->sum('stock');

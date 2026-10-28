@@ -21,7 +21,7 @@ class ProductController extends Controller
             UserStock::initializeForUser($targetUserId);
             $userStocks = UserStock::where('user_id', $targetUserId)->get()->keyBy('tyunit');
 
-            $products = Product::all()->map(function ($p) use ($userStocks, $targetUserId) {
+            $products = Product::ordered()->get()->map(function ($p) use ($userStocks, $targetUserId) {
                 $code = sprintf('BV%02d', $p->id);
                 $uStock = $userStocks->get($code);
                 $kuota = $uStock ? (int) $uStock->kuota : 0;
@@ -41,7 +41,7 @@ class ProductController extends Controller
             return response()->json($products);
         }
 
-        $products = Product::all()->map(function ($p) {
+        $products = Product::ordered()->get()->map(function ($p) {
             $kuota = (int) ($p->kuota ?? 0);
             $totalTerjualGroup = !empty($p->kdklp)
                 ? (int) Product::where('kdklp', $p->kdklp)->sum('stock')

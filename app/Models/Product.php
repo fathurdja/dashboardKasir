@@ -49,4 +49,17 @@ class Product extends Model
             }
         });
     }
+
+    public function scopeOrdered($query)
+    {
+        return $query->orderByRaw("
+            FIELD(kdklp, 'GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS'),
+            CASE 
+                WHEN name LIKE '%isi saja%' THEN 1 
+                WHEN name LIKE '%+ isi%' OR name LIKE '%+%' THEN 2 
+                ELSE 3 
+            END,
+            price ASC
+        ");
+    }
 }

@@ -18,7 +18,7 @@ class MasterStockController extends Controller
      */
     public function index(Request $request)
     {
-        $stocks = MasterStock::with('items')->get();
+        $stocks = MasterStock::with('items')->ordered()->get();
         return MasterStockResource::collection($stocks);
     }
 
@@ -325,9 +325,10 @@ class MasterStockController extends Controller
         $groups = MasterStock::select('kdklp')
             ->distinct()
             ->whereNotNull('kdklp')
+            ->orderByRaw("FIELD(kdklp, 'GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS')")
             ->get()
             ->map(function ($row) {
-                $items = MasterStock::where('kdklp', $row->kdklp)->get();
+                $items = MasterStock::where('kdklp', $row->kdklp)->ordered()->get();
                 $first = $items->first();
                 $stockAwal = $first ? (int) $first->kuota : 0;
                 $totalTerjual = (int) $items->sum('stock');
@@ -351,7 +352,7 @@ class MasterStockController extends Controller
      */
     public function getStockTerjual(Request $request)
     {
-        $query = MasterStock::query();
+        $query = MasterStock::ordered();
         if ($request->has('kelompok')) {
             $query->where('kdklp', strtoupper($request->kelompok));
         }
@@ -417,9 +418,10 @@ class MasterStockController extends Controller
         $groups = MasterStock::select('kdklp')
             ->distinct()
             ->whereNotNull('kdklp')
+            ->orderByRaw("FIELD(kdklp, 'GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS')")
             ->get()
             ->map(function ($row) {
-                $items = MasterStock::where('kdklp', $row->kdklp)->get();
+                $items = MasterStock::where('kdklp', $row->kdklp)->ordered()->get();
                 $first = $items->first();
                 $stockAwal = $first ? (int) $first->kuota : 0;
                 $totalTerjual = (int) $items->sum('stock');

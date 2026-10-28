@@ -63,4 +63,17 @@ class MasterStock extends Model
     {
         return $this->hasMany(TransactionItem::class, 'tyunit', 'TYUNIT');
     }
+
+    public function scopeOrdered($query)
+    {
+        return $query->orderByRaw("
+            FIELD(kdklp, 'GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS'),
+            CASE 
+                WHEN NTYUNIT LIKE '%isi saja%' THEN 1 
+                WHEN NTYUNIT LIKE '%+ isi%' OR NTYUNIT LIKE '%+%' THEN 2 
+                ELSE 3 
+            END,
+            hjual ASC
+        ");
+    }
 }
