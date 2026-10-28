@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\MasterStock;
 use App\Models\Product;
 use App\Models\Transaction;
@@ -11,12 +12,13 @@ use App\Models\User;
 use App\Models\UserStock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TransactionController extends Controller
 {
     /**
      * GET /api/transaksi
-     * Admin: view all transactions (optional filter ?user_id=X)
+     * Admin: view all transactions (optional filter ?user_id=X or ?search=X)
      * Regular User: view ONLY their own transactions
      */
     public function index(Request $request)
@@ -25,6 +27,15 @@ class TransactionController extends Controller
 
         $query = Transaction::with(['items', 'user:id,name,username,email,role'])
             ->orderBy('tanggal', 'desc');
+
+        if ($request->filled('search')) {
+            $search = trim($request->input('search'));
+            $query->where(function ($q) use ($search) {
+                $q->where('id_transaksi', 'LIKE', "%{$search}%")
+                  ->orWhere('customer_name', 'LIKE', "%{$search}%")
+                  ->orWhere('alamat', 'LIKE', "%{$search}%");
+            });
+        }
 
         if ($currentUser) {
             if (!$currentUser->isAdmin()) {
@@ -72,23 +83,66 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         try {
+            // 1. Flexible Parameter Aliasing for Frontend Compatibility
+            if (!$request->filled('customerName')) {
+                $cName = $request->input('customer_name')
+                      ?? $request->input('name')
+                      ?? $request->input('customer')
+                      ?? $request->input('pelanggan');
+                if ($cName) {
+                    $request->merge(['customerName' => trim($cName)]);
+                }
+            }
+
+            if (!$request->filled('alamat')) {
+                $addr = $request->input('address') ?? 'Gorontalo';
+                $request->merge(['alamat' => $addr ?: 'Gorontalo']);
+            }
+
+            if (!$request->filled('date') && $request->filled('tanggal')) {
+                $request->merge(['date' => $request->input('tanggal')]);
+            }
+            if (!$request->filled('date')) {
+                $request->merge(['date' => now()->format('Y-m-d H:i:s')]);
+            }
+
+            if (!$request->filled('status')) {
+                $request->merge(['status' => 'LUNAS']);
+            }
+
+            $inputTrxId = $request->input('id_transaksi');
+            if (empty($inputTrxId) || Transaction::where('id_transaksi', $inputTrxId)->exists()) {
+                $today = date('Ymd');
+                $lastTrx = Transaction::where('id_transaksi', 'LIKE', "Trx-{$today}-%")
+                    ->orderBy('id_transaksi', 'desc')
+                    ->first();
+                $nextNum = 1;
+                if ($lastTrx && preg_match('/Trx-\d+-(\d+)/', $lastTrx->id_transaksi, $m)) {
+                    $nextNum = ((int)$m[1]) + 1;
+                }
+                $request->merge(['id_transaksi' => sprintf("Trx-%s-%04d", $today, $nextNum)]);
+            }
+
+            // 2. Validation
             $validated = $request->validate([
                 'id_transaksi'     => 'required|string',
                 'customerName'     => 'required|string',
-                'alamat'           => 'required|string',
-                'date'             => 'required|date',
+                'alamat'           => 'nullable|string',
+                'date'             => 'required',
                 'total'            => 'required|numeric',
                 'status'           => 'required|string',
                 'user_id'          => 'sometimes|nullable|exists:users,id',
                 'user_name'        => 'sometimes|nullable|string',
 
                 'items'            => 'required|array|min:1',
-                'items.*.tyunit'   => 'required|string|exists:munit,TYUNIT',
+                'items.*.tyunit'   => 'required',
                 'items.*.price'    => 'required|numeric',
                 'items.*.quantity' => 'required|integer|min:1',
-                'items.*.bonus'    => 'required|integer|min:0',
+                'items.*.bonus'    => 'nullable|integer|min:0',
                 'items.*.subtotal' => 'required|numeric|min:0',
             ]);
+
+            $validated['alamat'] = !empty($validated['alamat']) ? trim($validated['alamat']) : 'Gorontalo';
 
             // Resolve acting user
             $currentUser = AuthController::resolveCurrentUser($request);
@@ -105,7 +159,6 @@ class TransactionController extends Controller
                     $userName = $targetUser->name;
                 }
             } else {
-                // Default to admin/system if completely unauthenticated
                 $admin = User::where('role', 'admin')->first();
                 $userId = $admin ? $admin->id : 1;
                 $userName = $admin ? $admin->name : 'Admin';
@@ -115,19 +168,34 @@ class TransactionController extends Controller
                 UserStock::initializeForUser($userId);
             }
 
-            DB::transaction(function () use ($validated, $userId, $userName) {
+            $trx = null;
 
-                // 1. Group required quantities and resolve items
+            DB::transaction(function () use ($validated, $userId, $userName, $request, &$trx) {
+
+                // 3. Group required quantities and resolve items
                 $groupSalesNeeded = [];
                 $resolvedItems = [];
 
                 foreach ($validated['items'] as $item) {
-                    $barang = MasterStock::where('TYUNIT', $item['tyunit'])
-                        ->lockForUpdate()
-                        ->first();
+                    $tyunit = (string)$item['tyunit'];
+
+                    $barang = MasterStock::where('TYUNIT', $tyunit)->lockForUpdate()->first();
+                    if (!$barang && is_numeric($tyunit)) {
+                        $formattedTyunit = sprintf("BV%02d", (int)$tyunit);
+                        $barang = MasterStock::where('TYUNIT', $formattedTyunit)->lockForUpdate()->first();
+                        if ($barang) {
+                            $item['tyunit'] = $formattedTyunit;
+                        }
+                    }
+                    if (!$barang && !empty($item['nama_barang'])) {
+                        $barang = MasterStock::where('NTYUNIT', $item['nama_barang'])->lockForUpdate()->first();
+                        if ($barang) {
+                            $item['tyunit'] = $barang->TYUNIT;
+                        }
+                    }
 
                     if (!$barang) {
-                        throw new \Exception("Barang {$item['tyunit']} tidak ditemukan");
+                        throw new \Exception("Barang {$tyunit} tidak ditemukan");
                     }
 
                     $totalKeluar = (int) $item['quantity'] + (int) ($item['bonus'] ?? 0);
@@ -150,58 +218,35 @@ class TransactionController extends Controller
                     ];
                 }
 
-                // 2. Validate Quota against UserStock (if user has quota assigned)
-                if ($userId) {
-                    foreach ($groupSalesNeeded as $groupKey => $info) {
-                        if (!empty($info['kdklp'])) {
-                            $userKuota = (int) UserStock::where('user_id', $userId)
-                                ->where('kdklp', $info['kdklp'])
-                                ->value('kuota');
-
-                            if ($userKuota > 0) {
-                                $currentSold = (int) UserStock::where('user_id', $userId)
-                                    ->where('kdklp', $info['kdklp'])
-                                    ->sum('stock');
-
-                                $newTotal = $currentSold + $info['needed'];
-                                if ($newTotal > $userKuota) {
-                                    $sisaKuota = max(0, $userKuota - $currentSold);
-                                    throw new \Exception("Stok {$info['name']} Anda ({$userName}) tidak mencukupi. Sisa kuota tersedia: {$sisaKuota} unit (dibutuhkan: {$info['needed']} unit)");
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Fallback: Validate Global Quota
-                    foreach ($groupSalesNeeded as $groupKey => $info) {
-                        if (!empty($info['kdklp'])) {
-                            $kuota = (int) MasterStock::where('kdklp', $info['kdklp'])->value('kuota');
-                            if ($kuota > 0) {
-                                $currentSold = (int) MasterStock::where('kdklp', $info['kdklp'])->sum('stock');
-                                $newTotal = $currentSold + $info['needed'];
-                                if ($newTotal > $kuota) {
-                                    $sisaKuota = max(0, $kuota - $currentSold);
-                                    throw new \Exception("Total penjualan {$info['name']} ({$newTotal}) melebihi kuota {$kuota}. Sisa kuota tersedia: {$sisaKuota} unit");
-                                }
+                // 4. Validate Quota
+                foreach ($groupSalesNeeded as $groupKey => $info) {
+                    if (!empty($info['kdklp'])) {
+                        $kuota = (int) MasterStock::where('kdklp', $info['kdklp'])->value('kuota');
+                        if ($kuota > 0) {
+                            $currentSold = (int) MasterStock::where('kdklp', $info['kdklp'])->sum('stock');
+                            $newTotal = $currentSold + $info['needed'];
+                            if ($newTotal > $kuota) {
+                                $sisaKuota = max(0, $kuota - $currentSold);
+                                throw new \Exception("Stok {$info['name']} tidak mencukupi. Sisa kuota tersedia: {$sisaKuota} unit (dibutuhkan: {$info['needed']} unit)");
                             }
                         }
                     }
                 }
 
-                // 3. Update UserStock and Global Stock
+                // 5. Update UserStock and Global Stock
                 foreach ($resolvedItems as $r) {
                     $item = $r['item'];
                     $barang = $r['barang'];
                     $totalKeluar = $r['totalKeluar'];
 
-                    // A. Update UserStock
+                    // Update UserStock
                     if ($userId) {
                         UserStock::where('user_id', $userId)
                             ->where('tyunit', $item['tyunit'])
                             ->increment('stock', $totalKeluar);
                     }
 
-                    // B. Update Global MasterStock & Product
+                    // Update Global MasterStock & Product
                     MasterStock::where('TYUNIT', $item['tyunit'])->increment('stock', $totalKeluar);
 
                     $prodId = str_starts_with($item['tyunit'], 'BV') ? (int) substr($item['tyunit'], 2) : null;
@@ -209,7 +254,7 @@ class TransactionController extends Controller
                     $prodQuery->increment('stock', $totalKeluar);
                 }
 
-                // 4. Create Transaction record with user association
+                // 6. Create Transaction record with user association
                 $trx = Transaction::create([
                     'id_transaksi'  => $validated['id_transaksi'],
                     'user_id'       => $userId,
@@ -221,7 +266,7 @@ class TransactionController extends Controller
                     'status'        => $validated['status'],
                 ]);
 
-                // 5. Create TransactionItem records
+                // 7. Create TransactionItem records
                 foreach ($resolvedItems as $r) {
                     $item = $r['item'];
                     $barang = $r['barang'];
@@ -232,21 +277,40 @@ class TransactionController extends Controller
                         'nama_barang'  => $barang->NTYUNIT,
                         'harga'        => $item['price'],
                         'quantity'     => $item['quantity'],
-                        'bonus'        => $item['bonus'],
+                        'bonus'        => $item['bonus'] ?? 0,
                         'subtotal'     => $item['subtotal'],
                     ]);
+                }
+
+                // 8. AUTO-REGISTER / SYNC CUSTOMER TO MASTER DATA
+                $custName = trim($validated['customerName']);
+                if (!empty($custName)) {
+                    Customer::firstOrCreate(
+                        ['name' => $custName],
+                        [
+                            'alamat'     => $validated['alamat'],
+                            'telepon'    => $request->input('telepon') ?? $request->input('phone') ?? null,
+                            'keterangan' => 'Terdaftar otomatis dari transaksi ' . $trx->id_transaksi,
+                        ]
+                    );
                 }
             });
 
             return response()->json([
-                'success' => true,
-                'message' => 'Transaksi berhasil disimpan',
-                'user'    => [
+                'success'      => true,
+                'message'      => 'Transaksi berhasil disimpan',
+                'id_transaksi' => $trx ? $trx->id_transaksi : $validated['id_transaksi'],
+                'user'         => [
                     'id'   => $userId,
                     'name' => $userName,
                 ]
             ], 201);
         } catch (\Throwable $e) {
+            Log::error('Transaction store error: ' . $e->getMessage(), [
+                'request' => $request->all(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -272,7 +336,7 @@ class TransactionController extends Controller
         }
 
         $trx->update([
-            'customer_name' => $request->customer_name ?? $trx->customer_name,
+            'customer_name' => $request->customer_name ?? $request->customerName ?? $trx->customer_name,
             'alamat'        => $request->alamat ?? $trx->alamat,
             'status'        => $request->status ?? $trx->status,
         ]);

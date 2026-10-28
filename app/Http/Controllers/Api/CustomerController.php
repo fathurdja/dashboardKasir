@@ -57,6 +57,9 @@ class CustomerController extends Controller
         if ($request->has('customer_name') && !$request->has('name')) {
             $request->merge(['name' => $request->input('customer_name')]);
         }
+        if ($request->has('customerName') && !$request->has('name')) {
+            $request->merge(['name' => $request->input('customerName')]);
+        }
         if ($request->has('address') && !$request->has('alamat')) {
             $request->merge(['alamat' => $request->input('address')]);
         }
@@ -74,13 +77,26 @@ class CustomerController extends Controller
             'keterangan' => 'nullable|string',
         ]);
 
-        $customer = Customer::create($validated);
+        if (empty($validated['alamat'])) {
+            $validated['alamat'] = 'Gorontalo';
+        }
 
-        return response()->json([
+        $customer = Customer::firstOrCreate(
+            ['name' => trim($validated['name'])],
+            $validated
+        );
+
+        if (!empty($validated['alamat']) && $customer->alamat === 'Gorontalo' && $validated['alamat'] !== 'Gorontalo') {
+            $customer->update(['alamat' => $validated['alamat']]);
+        }
+
+        $response = array_merge([
             'success' => true,
             'message' => 'Data pelanggan berhasil ditambahkan',
             'data'    => $customer,
-        ], 201);
+        ], $customer->toArray());
+
+        return response()->json($response, 201);
     }
 
     /**
@@ -98,6 +114,9 @@ class CustomerController extends Controller
 
         if ($request->has('customer_name') && !$request->has('name')) {
             $request->merge(['name' => $request->input('customer_name')]);
+        }
+        if ($request->has('customerName') && !$request->has('name')) {
+            $request->merge(['name' => $request->input('customerName')]);
         }
         if ($request->has('address') && !$request->has('alamat')) {
             $request->merge(['alamat' => $request->input('address')]);
@@ -118,11 +137,13 @@ class CustomerController extends Controller
 
         $customer->update($validated);
 
-        return response()->json([
+        $response = array_merge([
             'success' => true,
             'message' => 'Data pelanggan berhasil diperbarui',
             'data'    => $customer,
-        ]);
+        ], $customer->toArray());
+
+        return response()->json($response);
     }
 
     /**
