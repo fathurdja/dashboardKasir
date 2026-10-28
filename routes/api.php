@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\MasterStockController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\TransactionController;
@@ -100,3 +101,10 @@ Route::post('stocks/update', [MasterStockController::class, 'updateStock']);
 Route::post('stock/update', [MasterStockController::class, 'updateStock']);
 Route::post('update-stock', [MasterStockController::class, 'updateStock']);
 Route::post('stock-in', [MasterStockController::class, 'updateStock']);
+
+// ==========================================
+// 7. MASTER DATA PELANGGAN (CUSTOMERS)
+// ==========================================
+Route::apiResource('customers', CustomerController::class);
+Route::apiResource('pelanggan', CustomerController::class);
+
