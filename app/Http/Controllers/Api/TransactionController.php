@@ -320,11 +320,12 @@ class TransactionController extends Controller
 
     /**
      * PUT /api/transaksi/{id}
+     * Supports updating customer, alamat, status, and item master variants (e.g. changing from Rp 13.000 to Rp 0)
      */
     public function update(Request $request, $id)
     {
         $currentUser = AuthController::resolveCurrentUser($request);
-        $trx = Transaction::where('id_transaksi', $id)->firstOrFail();
+        $trx = Transaction::with('items')->where('id_transaksi', $id)->firstOrFail();
 
         if ($currentUser && !$currentUser->isAdmin()) {
             if ($trx->user_id && $trx->user_id != $currentUser->id) {
@@ -335,13 +336,149 @@ class TransactionController extends Controller
             }
         }
 
-        $trx->update([
-            'customer_name' => $request->customer_name ?? $request->customerName ?? $trx->customer_name,
-            'alamat'        => $request->alamat ?? $trx->alamat,
-            'status'        => $request->status ?? $trx->status,
-        ]);
+        try {
+            DB::transaction(function () use ($request, $trx) {
+                $updateData = [];
 
-        return response()->json(['message' => 'Transaksi berhasil diupdate']);
+                $custName = $request->input('customer_name')
+                         ?? $request->input('customerName')
+                         ?? $request->input('name')
+                         ?? $request->input('customer');
+                if (!empty($custName)) {
+                    $updateData['customer_name'] = trim($custName);
+                }
+
+                if ($request->has('alamat')) {
+                    $updateData['alamat'] = $request->input('alamat') ?: 'Gorontalo';
+                }
+
+                if ($request->has('status')) {
+                    $updateData['status'] = $request->input('status');
+                }
+
+                if ($request->has('date') || $request->has('tanggal')) {
+                    $updateData['tanggal'] = $request->input('date') ?? $request->input('tanggal');
+                }
+
+                if ($request->has('items') && is_array($request->input('items'))) {
+                    $rawItems = $request->input('items');
+                    $userId = $trx->user_id;
+
+                    // 1. Revert previous stock
+                    foreach ($trx->items as $oldItem) {
+                        $totalReturn = (int) $oldItem->quantity + (int) ($oldItem->bonus ?? 0);
+                        if ($totalReturn > 0) {
+                            if ($userId) {
+                                UserStock::where('user_id', $userId)
+                                    ->where('tyunit', $oldItem->tyunit)
+                                    ->decrement('stock', $totalReturn);
+                            }
+
+                            MasterStock::where('TYUNIT', $oldItem->tyunit)->decrement('stock', $totalReturn);
+
+                            $prodId = str_starts_with($oldItem->tyunit, 'BV') ? (int) substr($oldItem->tyunit, 2) : null;
+                            $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $oldItem->nama_barang);
+                            $prodQuery->decrement('stock', $totalReturn);
+                        }
+                    }
+
+                    // 2. Delete existing items
+                    TransactionItem::where('id_transaksi', $trx->id_transaksi)->delete();
+
+                    // 3. Insert new items and mutate stock
+                    $calculatedTotal = 0;
+                    foreach ($rawItems as $rawItem) {
+                        $tyunit = (string) ($rawItem['tyunit'] ?? $rawItem['TYUNIT'] ?? '');
+                        $barang = MasterStock::where('TYUNIT', $tyunit)->lockForUpdate()->first();
+
+                        if (!$barang && is_numeric($tyunit)) {
+                            $formatted = sprintf("BV%02d", (int)$tyunit);
+                            $barang = MasterStock::where('TYUNIT', $formatted)->lockForUpdate()->first();
+                            if ($barang) {
+                                $tyunit = $formatted;
+                            }
+                        }
+
+                        if (!$barang && !empty($rawItem['nama_barang'])) {
+                            $barang = MasterStock::where('NTYUNIT', $rawItem['nama_barang'])->lockForUpdate()->first();
+                            if ($barang) {
+                                $tyunit = $barang->TYUNIT;
+                            }
+                        }
+
+                        if (!$barang) {
+                            throw new \Exception("Barang {$tyunit} tidak ditemukan");
+                        }
+
+                        $qty = (int) ($rawItem['quantity'] ?? $rawItem['qty'] ?? 1);
+                        $bonus = (int) ($rawItem['bonus'] ?? 0);
+                        $harga = isset($rawItem['price']) ? (float)$rawItem['price'] : (isset($rawItem['harga']) ? (float)$rawItem['harga'] : (float)$barang->hjual);
+                        $subtotal = isset($rawItem['subtotal']) ? (float)$rawItem['subtotal'] : ($qty * $harga);
+
+                        $totalKeluar = $qty + $bonus;
+
+                        if ($userId) {
+                            UserStock::where('user_id', $userId)
+                                ->where('tyunit', $tyunit)
+                                ->increment('stock', $totalKeluar);
+                        }
+
+                        MasterStock::where('TYUNIT', $tyunit)->increment('stock', $totalKeluar);
+
+                        $prodId = str_starts_with($tyunit, 'BV') ? (int) substr($tyunit, 2) : null;
+                        $prodQuery = $prodId ? Product::where('id', $prodId) : Product::where('name', $barang->NTYUNIT);
+                        $prodQuery->increment('stock', $totalKeluar);
+
+                        TransactionItem::create([
+                            'id_transaksi' => $trx->id_transaksi,
+                            'tyunit'       => $tyunit,
+                            'nama_barang'  => $barang->NTYUNIT,
+                            'harga'        => $harga,
+                            'quantity'     => $qty,
+                            'bonus'        => $bonus,
+                            'subtotal'     => $subtotal,
+                        ]);
+
+                        $calculatedTotal += $subtotal;
+                    }
+
+                    $updateData['total'] = $request->has('total') ? (float)$request->input('total') : $calculatedTotal;
+                } elseif ($request->has('total')) {
+                    $updateData['total'] = (float)$request->input('total');
+                }
+
+                if (!empty($updateData)) {
+                    $trx->update($updateData);
+                }
+
+                if (!empty($updateData['customer_name'])) {
+                    Customer::firstOrCreate(
+                        ['name' => $updateData['customer_name']],
+                        ['alamat' => $updateData['alamat'] ?? $trx->alamat ?? 'Gorontalo']
+                    );
+                }
+            });
+
+            $freshTrx = Transaction::with(['items', 'user:id,name,username,email,role'])
+                ->where('id_transaksi', $id)
+                ->first();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transaksi berhasil diupdate',
+                'data'    => $freshTrx,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Transaction update error: ' . $e->getMessage(), [
+                'request' => $request->all(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
