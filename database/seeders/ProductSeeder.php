@@ -33,13 +33,17 @@ class ProductSeeder extends Seeder
             ['id' => 16, 'name' => 'Boneva Botol 1,5 L',    'kdklp' => 'BOTOL_1500', 'price' => 42000, 'stock' => 0],
             ['id' => 17, 'name' => 'Boneva Botol 1,5 L',    'kdklp' => 'BOTOL_1500', 'price' => 43000, 'stock' => 0],
 
-            // 18 - 23 : Kelompok GELAS
+            // 18 - 24 : Kelompok GELAS
             ['id' => 18, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 0,     'stock' => 0],
             ['id' => 19, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 21000, 'stock' => 0],
             ['id' => 20, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 22000, 'stock' => 0],
             ['id' => 21, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 23000, 'stock' => 0],
             ['id' => 22, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 21500, 'stock' => 0],
             ['id' => 23, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 22500, 'stock' => 0],
+            ['id' => 24, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 24000, 'stock' => 0],
+
+            // 25 : Kelompok BOTOL_600 (Tambahan varian)
+            ['id' => 25, 'name' => 'Boneva Botol 600 Ml',   'kdklp' => 'BOTOL_600', 'price' => 41000, 'stock' => 0],
         ];
 
         foreach ($products as $item) {
