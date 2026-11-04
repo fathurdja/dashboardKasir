@@ -296,6 +296,14 @@ class TransactionController extends Controller
                 }
             });
 
+            // Sync StockMonitoring for the transaction date
+            try {
+                $tglStr = substr($validated['date'], 0, 10);
+                \App\Models\StockMonitoring::syncDate($tglStr);
+            } catch (\Throwable $e) {
+                Log::warning('StockMonitoring sync error on store: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success'      => true,
                 'message'      => 'Transaksi berhasil disimpan',
@@ -452,6 +460,14 @@ class TransactionController extends Controller
                 }
             });
 
+            // Sync StockMonitoring for the transaction date
+            try {
+                $tglStr = substr($trx->tanggal, 0, 10);
+                \App\Models\StockMonitoring::syncDate($tglStr);
+            } catch (\Throwable $e) {
+                Log::warning('StockMonitoring sync error on update: ' . $e->getMessage());
+            }
+
             $freshTrx = Transaction::with(['items', 'user:id,name,username,email,role'])
                 ->where('id_transaksi', $id)
                 ->first();
@@ -511,6 +527,14 @@ class TransactionController extends Controller
             TransactionItem::where('id_transaksi', $trx->id_transaksi)->delete();
             $trx->delete();
         });
+
+        // Sync StockMonitoring for the transaction date
+        try {
+            $tglStr = substr($trx->tanggal, 0, 10);
+            \App\Models\StockMonitoring::syncDate($tglStr);
+        } catch (\Throwable $e) {
+            Log::warning('StockMonitoring sync error on destroy: ' . $e->getMessage());
+        }
 
         return response()->json(['message' => 'Transaksi berhasil dihapus']);
     }

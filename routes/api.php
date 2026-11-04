@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\MasterStockController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\ApiV2\StockMonitoringController;
 use App\Http\Controllers\Api\TransactionController;
 use Illuminate\Support\Facades\Route;
 
@@ -70,6 +71,17 @@ Route::get('stock-summary', [MasterStockController::class, 'stockSummary']);
 Route::get('stock-groups', [MasterStockController::class, 'stockGroups']);
 Route::get('stocks/groups', [MasterStockController::class, 'stockGroups']);
 Route::get('stocks/categories', [MasterStockController::class, 'stockGroups']);
+
+// ==========================================
+// 4B. MONITORING STOK (HARIAN & BULANAN)
+// ==========================================
+Route::get('stock-monitoring', [StockMonitoringController::class, 'index']);
+Route::get('monitoring-stock', [StockMonitoringController::class, 'index']);
+Route::get('stock-monitoring/daily', [StockMonitoringController::class, 'daily']);
+Route::get('stock-monitoring/monthly', [StockMonitoringController::class, 'monthly']);
+Route::post('stock-monitoring/masuk', [StockMonitoringController::class, 'stockMasuk']);
+Route::post('stock-masuk', [StockMonitoringController::class, 'stockMasuk']);
+Route::post('stock-monitoring/sync', [StockMonitoringController::class, 'sync']);
 
 // ==========================================
 // 5. TRANSAKSI / KASIR CHECKOUT

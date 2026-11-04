@@ -299,6 +299,33 @@ class MasterStockController extends Controller
         // Keep all UserStock records equalized
         UserStock::syncAllFromMasterStock();
 
+        // Record to StockMonitoring and StockEntry
+        try {
+            $prevKuota = (int) MasterStock::where('kdklp', $group)->value('kuota');
+            $today = date('Y-m-d');
+            \App\Models\StockEntry::create([
+                'tanggal'      => $today,
+                'kdklp'        => $group,
+                'tipe'         => 'SET_AWAL',
+                'jumlah'       => $kuotaVal,
+                'stok_sebelum' => $prevKuota,
+                'stok_sesudah' => $kuotaVal,
+                'user_id'      => $currentUser ? $currentUser->id : 1,
+                'keterangan'   => "Set stok awal {$group} ke {$kuotaVal} unit",
+            ]);
+
+            $monitoring = \App\Models\StockMonitoring::firstOrNew([
+                'tanggal' => $today,
+                'kdklp'   => $group,
+            ]);
+            $monitoring->stock_masuk = $kuotaVal;
+            $monitoring->keterangan = "Set stok awal {$group} ke {$kuotaVal} unit";
+            $monitoring->save();
+            \App\Models\StockMonitoring::syncDate($today);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Gagal update StockMonitoring pada setStockAwal: " . $e->getMessage());
+        }
+
         $totalTerjual = (int) MasterStock::where('kdklp', $group)->sum('stock');
         $sisaStock = max(0, $kuotaVal - $totalTerjual);
 
