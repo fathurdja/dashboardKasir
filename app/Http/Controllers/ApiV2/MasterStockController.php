@@ -287,6 +287,9 @@ class MasterStockController extends Controller
             }
         }
 
+        // Capture kuota sebelum diupdate untuk tracking mutasi
+        $prevKuota = (int) MasterStock::where('kdklp', $group)->value('kuota');
+
         // Set global stock awal
         MasterStock::where('kdklp', $group)->update(['kuota' => $kuotaVal, 'tglup' => now()]);
         Product::where('kdklp', $group)->update(['kuota' => $kuotaVal]);
@@ -301,25 +304,32 @@ class MasterStockController extends Controller
 
         // Record to StockMonitoring and StockEntry
         try {
-            $prevKuota = (int) MasterStock::where('kdklp', $group)->value('kuota');
             $today = date('Y-m-d');
+            $delta = $kuotaVal - $prevKuota;
+
             \App\Models\StockEntry::create([
                 'tanggal'      => $today,
                 'kdklp'        => $group,
-                'tipe'         => 'SET_AWAL',
-                'jumlah'       => $kuotaVal,
+                'tipe'         => $delta >= 0 ? 'SET_AWAL' : 'KOREKSI',
+                'jumlah'       => abs($delta),
                 'stok_sebelum' => $prevKuota,
                 'stok_sesudah' => $kuotaVal,
                 'user_id'      => $currentUser ? $currentUser->id : 1,
-                'keterangan'   => "Set stok awal {$group} ke {$kuotaVal} unit",
+                'keterangan'   => $delta >= 0 
+                    ? "Penambahan kuota {$group} (+{$delta}) dari {$prevKuota} ke {$kuotaVal} unit"
+                    : "Koreksi kuota {$group} ({$delta}) dari {$prevKuota} ke {$kuotaVal} unit",
             ]);
 
             $monitoring = \App\Models\StockMonitoring::firstOrNew([
                 'tanggal' => $today,
                 'kdklp'   => $group,
             ]);
-            $monitoring->stock_masuk = $kuotaVal;
-            $monitoring->keterangan = "Set stok awal {$group} ke {$kuotaVal} unit";
+
+            // Stok masuk harian hanya mencatat mutasi penambahan positif murni hari ini
+            if ($delta > 0) {
+                $monitoring->stock_masuk = ((int) $monitoring->stock_masuk) + $delta;
+            }
+            $monitoring->keterangan = "Update kuota {$group} ke {$kuotaVal} unit";
             $monitoring->save();
             \App\Models\StockMonitoring::syncDate($today);
         } catch (\Throwable $e) {
