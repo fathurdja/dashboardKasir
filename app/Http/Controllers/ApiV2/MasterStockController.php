@@ -320,14 +320,16 @@ class MasterStockController extends Controller
                     : "Koreksi kuota {$group} ({$delta}) dari {$prevKuota} ke {$kuotaVal} unit",
             ]);
 
+            \App\Models\StockMonitoring::ensureDateInitialized($today);
             $monitoring = \App\Models\StockMonitoring::firstOrNew([
                 'tanggal' => $today,
                 'kdklp'   => $group,
             ]);
 
-            // Stok masuk harian hanya mencatat mutasi penambahan positif murni hari ini
+            // Stok masuk harian mencatat penambahan delta hari ini
             if ($delta > 0) {
-                $monitoring->stock_masuk = ((int) $monitoring->stock_masuk) + $delta;
+                $monitoring->stok_tambahan = ((int) $monitoring->stok_tambahan) + $delta;
+                $monitoring->stock_masuk = ((int) $monitoring->stok_awal) + $monitoring->stok_tambahan;
             }
             $monitoring->keterangan = "Update kuota {$group} ke {$kuotaVal} unit";
             $monitoring->save();

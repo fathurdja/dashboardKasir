@@ -94,10 +94,14 @@ class StockMonitoringController extends Controller
         $groups = StockMonitoring::$groups;
         foreach ($groups as $grp) {
             $grpRows = $allRows->where('kdklp', $grp);
+            $gAwal = (int) $grpRows->sum('stok_awal');
+            $gTambahan = (int) $grpRows->sum('stok_tambahan');
             $gMasuk = (int) $grpRows->sum('stock_masuk');
             $gTerjual = (int) $grpRows->sum('stock_terjual');
             $perKelompok[] = [
                 'kdklp'           => $grp,
+                'stok_awal'       => $gAwal,
+                'stok_tambahan'   => $gTambahan,
                 'stock_masuk'     => $gMasuk,
                 'stock_terjual'   => $gTerjual,
                 'sisa_stock'      => max(0, $gMasuk - $gTerjual),
@@ -117,6 +121,8 @@ class StockMonitoringController extends Controller
             $dayEn = $cDate->format('l');
             $dayId = self::$dayNames[$dayEn] ?? $dayEn;
 
+            $dAwal = (int) $rows->sum('stok_awal');
+            $dTambahan = (int) $rows->sum('stok_tambahan');
             $dMasuk = (int) $rows->sum('stock_masuk');
             $dTerjual = (int) $rows->sum('stock_terjual');
             $dTrx = (int) $rows->sum('total_transaksi');
@@ -127,6 +133,8 @@ class StockMonitoringController extends Controller
                 $item = $rows->firstWhere('kdklp', $grp);
                 $details[] = [
                     'kdklp'           => $grp,
+                    'stok_awal'       => $item ? (int)$item->stok_awal : 0,
+                    'stok_tambahan'   => $item ? (int)$item->stok_tambahan : 0,
                     'stock_masuk'     => $item ? (int)$item->stock_masuk : 0,
                     'stock_terjual'   => $item ? (int)$item->stock_terjual : 0,
                     'sisa_stock'      => $item ? (int)$item->sisa_stock : 0,
@@ -140,6 +148,8 @@ class StockMonitoringController extends Controller
                 'tanggal'         => $tgl,
                 'hari'            => $dayId,
                 'formatted'       => $cDate->format('d/m/Y'),
+                'stok_awal'       => $dAwal,
+                'stok_tambahan'   => $dTambahan,
                 'total_masuk'     => $dMasuk,
                 'total_terjual'   => $dTerjual,
                 'sisa'            => max(0, $dMasuk - $dTerjual),
@@ -158,6 +168,8 @@ class StockMonitoringController extends Controller
         foreach ($groupedByMonth as $bln => $mRows) {
             list($year, $monthNum) = explode('-', $bln);
             $monthName = self::$monthNames[$monthNum] ?? $monthNum;
+            $mAwal = (int) $mRows->sum('stok_awal');
+            $mTambahan = (int) $mRows->sum('stok_tambahan');
             $mMasuk = (int) $mRows->sum('stock_masuk');
             $mTerjual = (int) $mRows->sum('stock_terjual');
             $mTrx = (int) $mRows->sum('total_transaksi');
@@ -166,10 +178,14 @@ class StockMonitoringController extends Controller
             $mDetails = [];
             foreach ($groups as $grp) {
                 $subRows = $mRows->where('kdklp', $grp);
+                $smAwal = (int) $subRows->sum('stok_awal');
+                $smTambahan = (int) $subRows->sum('stok_tambahan');
                 $smMasuk = (int) $subRows->sum('stock_masuk');
                 $smTerjual = (int) $subRows->sum('stock_terjual');
                 $mDetails[] = [
                     'kdklp'           => $grp,
+                    'stok_awal'       => $smAwal,
+                    'stok_tambahan'   => $smTambahan,
                     'stock_masuk'     => $smMasuk,
                     'stock_terjual'   => $smTerjual,
                     'sisa_stock'      => max(0, $smMasuk - $smTerjual),
@@ -181,6 +197,8 @@ class StockMonitoringController extends Controller
             $monthly[] = [
                 'bulan'           => $bln,
                 'nama_bulan'      => "{$monthName} {$year}",
+                'stok_awal'       => $mAwal,
+                'stok_tambahan'   => $mTambahan,
                 'total_masuk'     => $mMasuk,
                 'total_terjual'   => $mTerjual,
                 'sisa'            => max(0, $mMasuk - $mTerjual),
