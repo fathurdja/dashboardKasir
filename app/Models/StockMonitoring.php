@@ -33,6 +33,7 @@ class StockMonitoring extends Model
     ];
 
     public static $groups = ['GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS'];
+    public static $startDate = '2026-11-04';
 
     /**
      * Record incoming stock (penambahan stok / stok masuk)
@@ -88,6 +89,24 @@ class StockMonitoring extends Model
     {
         $groups = static::$groups;
 
+        // If date is before monitoring start date, zero out everything
+        if ($date < static::$startDate) {
+            foreach ($groups as $grp) {
+                $record = static::firstOrNew([
+                    'tanggal' => $date,
+                    'kdklp'   => $grp,
+                ]);
+                $record->stock_masuk = 0;
+                $record->stock_terjual = 0;
+                $record->sisa_stock = 0;
+                $record->total_transaksi = 0;
+                $record->total_nominal = 0;
+                $record->keterangan = 'Reset (mulai ' . static::$startDate . ')';
+                $record->save();
+            }
+            return;
+        }
+
         // Get sales from transactions for this date per kelompok
         $salesData = DB::table('transaksi_items')
             ->join('transaksi', 'transaksi_items.id_transaksi', '=', 'transaksi.id_transaksi')
@@ -129,6 +148,7 @@ class StockMonitoring extends Model
     {
         $dates = DB::table('transaksi')
             ->selectRaw('DISTINCT DATE(tanggal) as tgl')
+            ->whereDate('tanggal', '>=', static::$startDate)
             ->orderBy('tgl')
             ->pluck('tgl');
 
