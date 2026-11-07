@@ -82,11 +82,42 @@ class StockMonitoringController extends Controller
 
         $allRows = $query->orderBy('tanggal', 'desc')->get();
 
+        // Distinct transactions count queries (prevents double-counting multi-commodity receipts)
+        $trxCountsByDate = [];
+        $trxCountsByMonth = [];
+        $totalTransaksi = 0;
+
+        if (empty($kdklp)) {
+            $baseTrx = DB::table('transaksi');
+            if (!empty($date)) {
+                $baseTrx->whereDate('tanggal', $date);
+            } elseif (!empty($month)) {
+                $baseTrx->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$month]);
+            } else {
+                if (!empty($startDate)) $baseTrx->whereDate('tanggal', '>=', $startDate);
+                if (!empty($endDate)) $baseTrx->whereDate('tanggal', '<=', $endDate);
+            }
+            $totalTransaksi = (int) (clone $baseTrx)->count();
+
+            $trxCountsByDate = (clone $baseTrx)
+                ->selectRaw("DATE(tanggal) as tgl, COUNT(DISTINCT id_transaksi) as total_trx")
+                ->groupBy('tgl')
+                ->pluck('total_trx', 'tgl')
+                ->toArray();
+
+            $trxCountsByMonth = (clone $baseTrx)
+                ->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bln, COUNT(DISTINCT id_transaksi) as total_trx")
+                ->groupBy('bln')
+                ->pluck('total_trx', 'bln')
+                ->toArray();
+        } else {
+            $totalTransaksi = (int) $allRows->sum('total_transaksi');
+        }
+
         // 1. Overall Summary
         $totalMasuk = (int) $allRows->sum('stock_masuk');
         $totalTerjual = (int) $allRows->sum('stock_terjual');
         $sisaStock = max(0, $totalMasuk - $totalTerjual);
-        $totalTransaksi = (int) $allRows->sum('total_transaksi');
         $totalNominal = (float) $allRows->sum('total_nominal');
 
         // 2. Summary per Kelompok
@@ -125,7 +156,9 @@ class StockMonitoringController extends Controller
             $dTambahan = (int) $rows->sum('stok_tambahan');
             $dMasuk = (int) $rows->sum('stock_masuk');
             $dTerjual = (int) $rows->sum('stock_terjual');
-            $dTrx = (int) $rows->sum('total_transaksi');
+            $dTrx = empty($kdklp) 
+                ? (int) ($trxCountsByDate[$tgl] ?? $rows->sum('total_transaksi'))
+                : (int) $rows->sum('total_transaksi');
             $dNominal = (float) $rows->sum('total_nominal');
 
             $details = [];
@@ -172,7 +205,9 @@ class StockMonitoringController extends Controller
             $mTambahan = (int) $mRows->sum('stok_tambahan');
             $mMasuk = (int) $mRows->sum('stock_masuk');
             $mTerjual = (int) $mRows->sum('stock_terjual');
-            $mTrx = (int) $mRows->sum('total_transaksi');
+            $mTrx = empty($kdklp)
+                ? (int) ($trxCountsByMonth[$bln] ?? $mRows->sum('total_transaksi'))
+                : (int) $mRows->sum('total_transaksi');
             $mNominal = (float) $mRows->sum('total_nominal');
 
             $mDetails = [];
