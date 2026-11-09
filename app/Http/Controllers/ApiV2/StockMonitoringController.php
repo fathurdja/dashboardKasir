@@ -70,11 +70,10 @@ class StockMonitoringController extends Controller
         if (!empty($date)) {
             $query->whereDate('tanggal', $date);
         } elseif (!empty($month)) {
-            $query->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$month]);
+            $query->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$month])
+                  ->whereDate('tanggal', '>=', StockMonitoring::$startDate);
         } else {
-            if (!empty($startDate)) {
-                $query->whereDate('tanggal', '>=', $startDate);
-            }
+            $query->whereDate('tanggal', '>=', !empty($startDate) ? $startDate : StockMonitoring::$startDate);
             if (!empty($endDate)) {
                 $query->whereDate('tanggal', '<=', $endDate);
             }
@@ -92,9 +91,10 @@ class StockMonitoringController extends Controller
             if (!empty($date)) {
                 $baseTrx->whereDate('tanggal', $date);
             } elseif (!empty($month)) {
-                $baseTrx->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$month]);
+                $baseTrx->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$month])
+                    ->whereDate('tanggal', '>=', StockMonitoring::$startDate);
             } else {
-                if (!empty($startDate)) $baseTrx->whereDate('tanggal', '>=', $startDate);
+                $baseTrx->whereDate('tanggal', '>=', !empty($startDate) ? $startDate : StockMonitoring::$startDate);
                 if (!empty($endDate)) $baseTrx->whereDate('tanggal', '<=', $endDate);
             }
             $totalTransaksi = (int) (clone $baseTrx)->count();

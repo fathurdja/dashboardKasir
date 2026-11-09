@@ -38,7 +38,7 @@ class StockMonitoring extends Model
     ];
 
     public static $groups = ['GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS'];
-    public static $startDate = '2026-11-05';
+    public static $startDate = '2026-11-10';
 
     /**
      * Get baseline physical remaining stock from MasterStock (munit)
@@ -94,9 +94,13 @@ class StockMonitoring extends Model
                     }
                 }
 
-                // If no valid previous record (or starting baseline on start date), use current physical stock
-                if ($carryover === 0 && $date === static::$startDate) {
-                    $carryover = static::getPhysicalRemainingStock($grp);
+                // Pada start date, sisa kemarin (stok_awal) di-0-kan sesuai arahan awal baru
+                // Stok fisik yang tersedia dicatat sebagai stok_tambahan (masuk hari ini)
+                if ($date === static::$startDate) {
+                    $carryover = 0;
+                    $initialStock = static::getPhysicalRemainingStock($grp);
+                } else {
+                    $initialStock = 0;
                 }
 
                 // Any incoming entries already recorded for this date?
@@ -104,6 +108,10 @@ class StockMonitoring extends Model
                     ->where('kdklp', $grp)
                     ->whereIn('tipe', ['MASUK', 'SET_AWAL'])
                     ->sum('jumlah');
+
+                if ($tambahan === 0 && $initialStock > 0) {
+                    $tambahan = $initialStock;
+                }
 
                 $totalMasuk = $carryover + $tambahan;
 
@@ -117,9 +125,11 @@ class StockMonitoring extends Model
                     'sisa_stock'      => $totalMasuk,
                     'total_transaksi' => 0,
                     'total_nominal'   => 0.00,
-                    'keterangan'      => $tambahan > 0 
-                        ? "Bawaan sisa ({$carryover}) + tambahan masuk ({$tambahan})"
-                        : "Bawaan sisa kemarin ({$carryover})",
+                    'keterangan'      => $date === static::$startDate
+                        ? "Awal baru stok per " . static::$startDate . " (Stok masuk: {$tambahan})"
+                        : ($tambahan > 0 
+                            ? "Bawaan sisa ({$carryover}) + tambahan masuk ({$tambahan})"
+                            : "Bawaan sisa kemarin ({$carryover})"),
                 ]);
             }
         }
@@ -142,13 +152,21 @@ class StockMonitoring extends Model
         $groups = static::$groups;
         foreach ($groups as $grp) {
             $carryover = 0;
+            $tambahan = 0;
             if ($yesterday >= static::$startDate) {
                 $prevRecord = static::where('tanggal', $yesterday)->where('kdklp', $grp)->first();
                 if ($prevRecord) {
                     $carryover = (int) $prevRecord->sisa_stock;
                 }
-            } else {
-                $carryover = static::getPhysicalRemainingStock($grp);
+            } elseif ($today === static::$startDate) {
+                $carryover = 0;
+                $tambahan = (int) StockEntry::where('tanggal', $today)
+                    ->where('kdklp', $grp)
+                    ->whereIn('tipe', ['MASUK', 'SET_AWAL'])
+                    ->sum('jumlah');
+                if ($tambahan === 0) {
+                    $tambahan = static::getPhysicalRemainingStock($grp);
+                }
             }
 
             $record = static::firstOrNew([
@@ -157,11 +175,17 @@ class StockMonitoring extends Model
             ]);
 
             $record->stok_awal = $carryover;
-            $tambahan = (int) ($record->stok_tambahan ?? 0);
+            if ($tambahan > 0) {
+                $record->stok_tambahan = $tambahan;
+            } else {
+                $tambahan = (int) ($record->stok_tambahan ?? 0);
+            }
             $record->stock_masuk = $carryover + $tambahan;
-            $record->keterangan = $tambahan > 0
-                ? "Bawaan sisa ({$carryover}) + tambahan masuk ({$tambahan})"
-                : "Bawaan sisa kemarin ({$carryover})";
+            $record->keterangan = $today === static::$startDate
+                ? "Awal baru stok per " . static::$startDate . " (Stok masuk: {$tambahan})"
+                : ($tambahan > 0
+                    ? "Bawaan sisa ({$carryover}) + tambahan masuk ({$tambahan})"
+                    : "Bawaan sisa kemarin ({$carryover})");
             $record->save();
         }
 
