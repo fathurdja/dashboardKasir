@@ -44,6 +44,9 @@ class ProductSeeder extends Seeder
 
             // 25 : Kelompok BOTOL_600 (Tambahan varian)
             ['id' => 25, 'name' => 'Boneva Botol 600 Ml',   'kdklp' => 'BOTOL_600', 'price' => 41000, 'stock' => 0],
+
+            // 26 : Kelompok GELAS (Tambahan varian Rp 20.000)
+            ['id' => 26, 'name' => 'Boneva Gelas',          'kdklp' => 'GELAS', 'price' => 20000, 'stock' => 0],
         ];
 
         foreach ($products as $item) {
