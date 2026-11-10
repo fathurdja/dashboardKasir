@@ -368,6 +368,33 @@ class StockMonitoringController extends Controller
         $ket = $validated['keterangan'] ?? "Stok masuk {$group} (+{$jumlah} unit)";
         $userId = $currentUser ? $currentUser->id : 1;
 
+        // Prevent accidental rapid duplicate submissions (debounce within 10 seconds for exact same group, quantity, date)
+        $recentDuplicate = StockEntry::where('kdklp', $group)
+            ->where('jumlah', $jumlah)
+            ->where('tanggal', $date)
+            ->where('created_at', '>=', now()->subSeconds(10))
+            ->first();
+
+        if ($recentDuplicate) {
+            $currentKuota = (int) MasterStock::where('kdklp', $group)->value('kuota');
+            $totalTerjual = (int) MasterStock::where('kdklp', $group)->sum('stock');
+            $sisaKuota = max(0, $currentKuota - $totalTerjual);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Stok masuk {$group} (+{$jumlah} unit) sudah tercatat sebelumnya (pencegahan duplikasi otomatis).",
+                'duplicate_prevented' => true,
+                'data' => [
+                    'kdklp'          => $group,
+                    'stok_ditambah'  => $jumlah,
+                    'kuota_saat_ini' => $currentKuota,
+                    'total_terjual'  => $totalTerjual,
+                    'sisa_kuota'     => $sisaKuota,
+                    'entry_id'       => $recentDuplicate->id,
+                ]
+            ], 200);
+        }
+
         // 1. Record stock masuk to StockMonitoring & StockEntry
         $monitoring = StockMonitoring::recordStockMasuk($group, $jumlah, $date, 'MASUK', $ket, $userId);
 
