@@ -38,7 +38,7 @@ class StockMonitoring extends Model
     ];
 
     public static $groups = ['GALON', 'BOTOL_600', 'BOTOL_1500', 'GELAS'];
-    public static $startDate = '2026-11-10';
+    public static $startDate = '2026-11-09';
 
     /**
      * Get baseline physical remaining stock from MasterStock (munit)
@@ -94,8 +94,8 @@ class StockMonitoring extends Model
                     }
                 }
 
-                // Pada start date, sisa kemarin (stok_awal) di-0-kan sesuai arahan awal baru
-                // Stok fisik yang tersedia dicatat sebagai stok_tambahan (masuk hari ini)
+                // Pada start date (2026-11-09), sisa kemarin (stok_awal) di-0-kan sesuai arahan awal baru
+                // Stok fisik yang tersedia dicatat sebagai stok_tambahan (masuk hari itu)
                 if ($date === static::$startDate) {
                     $carryover = 0;
                     $initialStock = static::getPhysicalRemainingStock($grp);
@@ -265,6 +265,26 @@ class StockMonitoring extends Model
 
         // Ensure record is initialized first so carryover is set
         static::ensureDateInitialized($date);
+
+        // Pada baseline start date (2026-11-09), stok masuk adalah baseline stok awal baru.
+        // Penjualan hari itu tidak memotong stok awal ini (sudah bersih).
+        if ($date === static::$startDate) {
+            foreach ($groups as $grp) {
+                $record = static::where('tanggal', $date)->where('kdklp', $grp)->first();
+                if ($record) {
+                    $stokAwal = (int) ($record->stok_awal ?? 0);
+                    $stokTambahan = (int) ($record->stok_tambahan ?? 0);
+                    $totalMasuk = $stokAwal + $stokTambahan;
+                    $record->stock_masuk = $totalMasuk;
+                    $record->stock_terjual = 0;
+                    $record->total_transaksi = 0;
+                    $record->total_nominal = 0.00;
+                    $record->sisa_stock = $totalMasuk;
+                    $record->save();
+                }
+            }
+            return;
+        }
 
         // Get sales from transactions for this date per kelompok
         $salesData = DB::table('transaksi_items')

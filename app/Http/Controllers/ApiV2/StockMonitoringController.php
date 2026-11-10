@@ -89,57 +89,93 @@ class StockMonitoringController extends Controller
         if (empty($kdklp)) {
             $baseTrx = DB::table('transaksi');
             if (!empty($date)) {
-                $baseTrx->whereDate('tanggal', $date);
-            } elseif (!empty($month)) {
-                $baseTrx->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$month])
-                    ->whereDate('tanggal', '>=', StockMonitoring::$startDate);
+                if ($date === StockMonitoring::$startDate) {
+                    $totalTransaksi = 0;
+                    $trxCountsByDate = [];
+                    $trxCountsByMonth = [];
+                } else {
+                    $baseTrx->whereDate('tanggal', $date);
+                    $totalTransaksi = (int) (clone $baseTrx)->count();
+                    $trxCountsByDate = (clone $baseTrx)
+                        ->selectRaw("DATE(tanggal) as tgl, COUNT(DISTINCT id_transaksi) as total_trx")
+                        ->groupBy('tgl')
+                        ->pluck('total_trx', 'tgl')
+                        ->toArray();
+                }
             } else {
-                $baseTrx->whereDate('tanggal', '>=', !empty($startDate) ? $startDate : StockMonitoring::$startDate);
-                if (!empty($endDate)) $baseTrx->whereDate('tanggal', '<=', $endDate);
+                $baseTrx->whereDate('tanggal', '>', StockMonitoring::$startDate);
+                if (!empty($month)) {
+                    $baseTrx->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$month]);
+                }
+                if (!empty($startDate)) {
+                    $baseTrx->whereDate('tanggal', '>=', $startDate);
+                }
+                if (!empty($endDate)) {
+                    $baseTrx->whereDate('tanggal', '<=', $endDate);
+                }
+                $totalTransaksi = (int) (clone $baseTrx)->count();
+
+                $trxCountsByDate = (clone $baseTrx)
+                    ->selectRaw("DATE(tanggal) as tgl, COUNT(DISTINCT id_transaksi) as total_trx")
+                    ->groupBy('tgl')
+                    ->pluck('total_trx', 'tgl')
+                    ->toArray();
+
+                $trxCountsByMonth = (clone $baseTrx)
+                    ->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bln, COUNT(DISTINCT id_transaksi) as total_trx")
+                    ->groupBy('bln')
+                    ->pluck('total_trx', 'bln')
+                    ->toArray();
             }
-            $totalTransaksi = (int) (clone $baseTrx)->count();
-
-            $trxCountsByDate = (clone $baseTrx)
-                ->selectRaw("DATE(tanggal) as tgl, COUNT(DISTINCT id_transaksi) as total_trx")
-                ->groupBy('tgl')
-                ->pluck('total_trx', 'tgl')
-                ->toArray();
-
-            $trxCountsByMonth = (clone $baseTrx)
-                ->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bln, COUNT(DISTINCT id_transaksi) as total_trx")
-                ->groupBy('bln')
-                ->pluck('total_trx', 'bln')
-                ->toArray();
         } else {
             $totalTransaksi = (int) $allRows->sum('total_transaksi');
         }
 
-        // 1. Overall Summary
-        $totalMasuk = (int) $allRows->sum('stock_masuk');
-        $totalTerjual = (int) $allRows->sum('stock_terjual');
-        $sisaStock = max(0, $totalMasuk - $totalTerjual);
-        $totalNominal = (float) $allRows->sum('total_nominal');
-
-        // 2. Summary per Kelompok
+        // 2. Summary per Kelompok & Overall Totals
         $perKelompok = [];
         $groups = StockMonitoring::$groups;
         foreach ($groups as $grp) {
             $grpRows = $allRows->where('kdklp', $grp);
-            $gAwal = (int) $grpRows->sum('stok_awal');
-            $gTambahan = (int) $grpRows->sum('stok_tambahan');
-            $gMasuk = (int) $grpRows->sum('stock_masuk');
-            $gTerjual = (int) $grpRows->sum('stock_terjual');
+            if ($grpRows->isEmpty()) {
+                continue;
+            }
+
+            if (!empty($date)) {
+                // Single day view
+                $row = $grpRows->first();
+                $gAwal = (int) ($row->stok_awal ?? 0);
+                $gTambahan = (int) ($row->stok_tambahan ?? 0);
+                $gMasuk = (int) ($row->stock_masuk ?? 0);
+                $gTerjual = (int) ($row->stock_terjual ?? 0);
+                $gSisa = (int) ($row->sisa_stock ?? 0);
+            } else {
+                // Multi-day / Range view: opening stock is from earliest day, incoming additions are summed
+                $earliest = $grpRows->sortBy('tanggal')->first();
+                $latest = $grpRows->sortByDesc('tanggal')->first();
+                $gAwal = $earliest ? (int) $earliest->stok_awal : 0;
+                $gTambahan = (int) $grpRows->sum('stok_tambahan');
+                $gMasuk = $gAwal + $gTambahan;
+                $gTerjual = (int) $grpRows->sum('stock_terjual');
+                $gSisa = $latest ? (int) $latest->sisa_stock : max(0, $gMasuk - $gTerjual);
+            }
+
             $perKelompok[] = [
                 'kdklp'           => $grp,
                 'stok_awal'       => $gAwal,
                 'stok_tambahan'   => $gTambahan,
                 'stock_masuk'     => $gMasuk,
                 'stock_terjual'   => $gTerjual,
-                'sisa_stock'      => max(0, $gMasuk - $gTerjual),
+                'sisa_stock'      => $gSisa,
                 'total_transaksi' => (int) $grpRows->sum('total_transaksi'),
                 'total_nominal'   => (float) $grpRows->sum('total_nominal'),
             ];
         }
+
+        // 1. Overall Summary (aggregated from groups to avoid double counting multi-day carryovers)
+        $totalMasuk = (int) collect($perKelompok)->sum('stock_masuk');
+        $totalTerjual = (int) collect($perKelompok)->sum('stock_terjual');
+        $sisaStock = (int) collect($perKelompok)->sum('sisa_stock');
+        $totalNominal = (float) $allRows->sum('total_nominal');
 
         // 3. Daily Breakdown
         $daily = [];
@@ -201,33 +237,37 @@ class StockMonitoringController extends Controller
         foreach ($groupedByMonth as $bln => $mRows) {
             list($year, $monthNum) = explode('-', $bln);
             $monthName = self::$monthNames[$monthNum] ?? $monthNum;
-            $mAwal = (int) $mRows->sum('stok_awal');
-            $mTambahan = (int) $mRows->sum('stok_tambahan');
-            $mMasuk = (int) $mRows->sum('stock_masuk');
-            $mTerjual = (int) $mRows->sum('stock_terjual');
-            $mTrx = empty($kdklp)
-                ? (int) ($trxCountsByMonth[$bln] ?? $mRows->sum('total_transaksi'))
-                : (int) $mRows->sum('total_transaksi');
-            $mNominal = (float) $mRows->sum('total_nominal');
-
             $mDetails = [];
             foreach ($groups as $grp) {
                 $subRows = $mRows->where('kdklp', $grp);
-                $smAwal = (int) $subRows->sum('stok_awal');
+                $earliest = $subRows->sortBy('tanggal')->first();
+                $latest = $subRows->sortByDesc('tanggal')->first();
+                $smAwal = $earliest ? (int) $earliest->stok_awal : 0;
                 $smTambahan = (int) $subRows->sum('stok_tambahan');
-                $smMasuk = (int) $subRows->sum('stock_masuk');
+                $smMasuk = $smAwal + $smTambahan;
                 $smTerjual = (int) $subRows->sum('stock_terjual');
+                $smSisa = $latest ? (int) $latest->sisa_stock : max(0, $smMasuk - $smTerjual);
                 $mDetails[] = [
                     'kdklp'           => $grp,
                     'stok_awal'       => $smAwal,
                     'stok_tambahan'   => $smTambahan,
                     'stock_masuk'     => $smMasuk,
                     'stock_terjual'   => $smTerjual,
-                    'sisa_stock'      => max(0, $smMasuk - $smTerjual),
+                    'sisa_stock'      => $smSisa,
                     'total_transaksi' => (int) $subRows->sum('total_transaksi'),
                     'total_nominal'   => (float) $subRows->sum('total_nominal'),
                 ];
             }
+
+            $mAwal = (int) collect($mDetails)->sum('stok_awal');
+            $mTambahan = (int) collect($mDetails)->sum('stok_tambahan');
+            $mMasuk = $mAwal + $mTambahan;
+            $mTerjual = (int) collect($mDetails)->sum('stock_terjual');
+            $mSisa = (int) collect($mDetails)->sum('sisa_stock');
+            $mTrx = empty($kdklp)
+                ? (int) ($trxCountsByMonth[$bln] ?? $mRows->sum('total_transaksi'))
+                : (int) $mRows->sum('total_transaksi');
+            $mNominal = (float) $mRows->sum('total_nominal');
 
             $monthly[] = [
                 'bulan'           => $bln,
@@ -236,7 +276,7 @@ class StockMonitoringController extends Controller
                 'stok_tambahan'   => $mTambahan,
                 'total_masuk'     => $mMasuk,
                 'total_terjual'   => $mTerjual,
-                'sisa'            => max(0, $mMasuk - $mTerjual),
+                'sisa'            => $mSisa,
                 'total_transaksi' => $mTrx,
                 'total_nominal'   => $mNominal,
                 'rincian'         => $mDetails,
