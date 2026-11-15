@@ -2,12 +2,20 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-     protected $fillable = [
+    use HasUuids, SoftDeletes;
+
+    protected $fillable = [
+        'category_id',
         'name',
+<<<<<<< HEAD
         'kdklp',
         'price',
         'stock',
@@ -61,5 +69,50 @@ class Product extends Model
             END,
             price ASC
         ");
+=======
+        'description',
+        'barcode',
+        'purchase_price',
+        'price',
+        'is_active',
+        'image',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'purchase_price' => 'decimal:2',
+            'price' => 'decimal:2',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class);
+    }
+
+    public function stockTransactions(): HasMany
+    {
+        return $this->hasMany(StockTransaction::class);
+    }
+
+    public function getCurrentStock(): int
+    {
+        $in = $this->stockTransactions()->where('type', 'in')->sum('quantity');
+        $out = $this->stockTransactions()->where('type', 'out')->sum('quantity');
+        
+        return $in - $out;
+>>>>>>> 13f94dc553435ee468ca1644484e7db79d112b6e
     }
 }

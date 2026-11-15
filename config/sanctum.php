@@ -1,8 +1,11 @@
 <?php
 
+<<<<<<< HEAD
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
+=======
+>>>>>>> 13f94dc553435ee468ca1644484e7db79d112b6e
 use Laravel\Sanctum\Sanctum;
 
 return [
@@ -79,9 +82,15 @@ return [
     */
 
     'middleware' => [
+<<<<<<< HEAD
         'authenticate_session' => AuthenticateSession::class,
         'encrypt_cookies' => EncryptCookies::class,
         'validate_csrf_token' => ValidateCsrfToken::class,
+=======
+        'authenticate_session' => Laravel\Sanctum\Http\Middleware\AuthenticateSession::class,
+        'encrypt_cookies' => Illuminate\Cookie\Middleware\EncryptCookies::class,
+        'validate_csrf_token' => Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+>>>>>>> 13f94dc553435ee468ca1644484e7db79d112b6e
     ],
 
 ];

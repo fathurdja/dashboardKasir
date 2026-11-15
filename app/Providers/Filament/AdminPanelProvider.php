@@ -27,11 +27,29 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(\App\Filament\Auth\Login::class)
+            ->font('Figtree')
+            ->brandName('Kasir POS')
+            ->sidebarCollapsibleOnDesktop()
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::hex('#8BAE66'),
+                'gray'    => Color::Slate,
+                'success' => Color::hex('#628141'),
+                'warning' => Color::hex('#EBD5AB'),
+                'danger'  => Color::Rose,
+                'info'    => Color::Sky,
             ])
-            ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')
+            ->navigationGroups([
+                \Filament\Navigation\NavigationGroup::make('Master Data')
+                    ->icon('heroicon-o-building-storefront'),
+                \Filament\Navigation\NavigationGroup::make('Transaksi')
+                    ->icon('heroicon-o-banknotes'),
+                \Filament\Navigation\NavigationGroup::make('Pengaturan')
+                    ->icon('heroicon-o-wrench-screwdriver')
+                    ->collapsed(),
+            ])
+            ->viteTheme('resources/css/filament/admin/theme.css')
+            ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\Filament\Admin\Pages')
             ->pages([
                 Dashboard::class,
@@ -39,7 +57,8 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')
             ->widgets([
                 AccountWidget::class,
-                FilamentInfoWidget::class,
+                \App\Filament\Admin\Resources\Orders\Widgets\StatsOverview::class,
+                \App\Filament\Admin\Resources\Orders\Widgets\SalesChart::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -54,6 +73,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            ->renderHook(
+                'panels::body.end',
+                fn () => view('filament.onboarding-tour'),
+            );
     }
 }

@@ -1,0 +1,251 @@
+@import 'tailwindcss';
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*.php';
+@source '../../../../resources/views/filament/**/*.blade.php';
+
+/*
+ * Dashboard Kasir POS — Custom Filament Theme
+ * Palette: #1B211A (Dark Green), #628141 (Mid Green), #8BAE66 (Light Green), #EBD5AB (Beige)
+ * Font: Figtree (loaded via Filament ->font())
+ */
+
+@theme {
+    --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* ============================================
+   SIDEBAR OVERRIDES
+   ============================================ */
+
+/* Sidebar background with depth shadow */
+.fi-sidebar {
+    background: linear-gradient(180deg, #1B211A 0%, #151A14 100%) !important;
+    border-right: 1px solid rgba(139, 174, 102, 0.15) !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2), 1px 0 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Sidebar nav items — elevated card-style */
+.fi-sidebar-item a,
+.fi-sidebar-item button {
+    color: rgba(235, 213, 171, 0.75) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-radius: 10px !important;
+    margin: 2px 8px !important;
+    padding: 8px 12px !important;
+}
+
+.fi-sidebar-item a:hover,
+.fi-sidebar-item button:hover {
+    color: #EBD5AB !important;
+    background: rgba(139, 174, 102, 0.12) !important;
+    box-shadow: 0 2px 12px rgba(139, 174, 102, 0.1),
+                inset 0 1px 0 rgba(139, 174, 102, 0.08) !important;
+    transform: translateX(3px);
+}
+
+/* Sidebar nav icons */
+.fi-sidebar-item .fi-sidebar-item-icon {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.fi-sidebar-item a:hover .fi-sidebar-item-icon,
+.fi-sidebar-item button:hover .fi-sidebar-item-icon {
+    color: #8BAE66 !important;
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 4px rgba(139, 174, 102, 0.3));
+}
+
+/* Active sidebar item — glowing card */
+.fi-sidebar-item-active a,
+.fi-sidebar-item-active button {
+    color: #EBD5AB !important;
+    background: rgba(139, 174, 102, 0.18) !important;
+    border-left: 3px solid #8BAE66 !important;
+    box-shadow: 0 4px 16px rgba(139, 174, 102, 0.15),
+                inset 0 1px 0 rgba(139, 174, 102, 0.12),
+                0 1px 3px rgba(0, 0, 0, 0.12) !important;
+}
+
+.fi-sidebar-item-active .fi-sidebar-item-icon {
+    color: #8BAE66 !important;
+    filter: drop-shadow(0 0 6px rgba(139, 174, 102, 0.4));
+}
+
+/* Sidebar group labels */
+.fi-sidebar-group-label {
+    color: rgba(139, 174, 102, 0.6) !important;
+    font-size: 0.65rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    padding: 0 8px !important;
+}
+
+/* Sidebar brand/header */
+.fi-sidebar-header {
+    border-bottom: 1px solid rgba(139, 174, 102, 0.15) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.fi-sidebar-header a,
+.fi-logo {
+    color: #8BAE66 !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Sidebar collapse toggle button */
+.fi-sidebar-close-btn,
+.fi-sidebar-open-btn {
+    transition: all 0.25s ease !important;
+}
+
+.fi-sidebar-close-btn:hover,
+.fi-sidebar-open-btn:hover {
+    color: #8BAE66 !important;
+    background: rgba(139, 174, 102, 0.12) !important;
+    box-shadow: 0 2px 8px rgba(139, 174, 102, 0.15) !important;
+}
+
+/* ============================================
+   TOPBAR OVERRIDES
+   ============================================ */
+/* Let Filament handle Topbar colors naturally for Light/Dark mode */
+
+/* ============================================
+   STATS WIDGET CARDS
+   ============================================ */
+.fi-wi-stats-overview-stat {
+    border: 1px solid rgba(98, 129, 65, 0.2) !important;
+    border-radius: 14px !important;
+    transition: all 0.25s ease !important;
+    box-shadow: 0 2px 8px rgba(27, 33, 26, 0.06) !important;
+}
+
+.fi-wi-stats-overview-stat:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 24px rgba(27, 33, 26, 0.12) !important;
+    border-color: #8BAE66 !important;
+}
+
+/* ============================================
+   WIDGET CONTAINERS
+   ============================================ */
+.fi-wi {
+    border-radius: 16px !important;
+    overflow: hidden !important;
+}
+
+/* Table widgets styling */
+.fi-ta {
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(98, 129, 65, 0.15) !important;
+}
+
+.fi-ta-header-cell {
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.04em !important;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.fi-btn-primary {
+    background: linear-gradient(135deg, #628141 0%, #8BAE66 100%) !important;
+    box-shadow: 0 4px 12px rgba(98, 129, 65, 0.25) !important;
+    color: #1B211A !important;
+    transition: all 0.2s ease !important;
+}
+
+.fi-btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(98, 129, 65, 0.35) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ============================================
+   CARDS & SECTIONS
+   ============================================ */
+.fi-section {
+    border-radius: 16px !important;
+    border: 1px solid rgba(98, 129, 65, 0.1) !important;
+    box-shadow: 0 1px 4px rgba(27, 33, 26, 0.04) !important;
+}
+
+/* ============================================
+   LOGIN PAGE
+   ============================================ */
+.fi-simple-layout {
+    background: linear-gradient(135deg, #1B211A 0%, #2A3328 50%, #151A14 100%) !important;
+}
+
+.fi-simple-main-ctn {
+    border: 1px solid rgba(139, 174, 102, 0.2) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* ============================================
+   CHART WIDGET STYLING
+   ============================================ */
+.fi-wi-chart {
+    border: 1px solid rgba(98, 129, 65, 0.15) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 8px rgba(27, 33, 26, 0.06) !important;
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+.fi-badge {
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+}
+
+/* ============================================
+   GLOBAL ENHANCEMENTS
+   ============================================ */
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(139, 174, 102, 0.25);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 174, 102, 0.4);
+}
+
+/* Selection color */
+::selection {
+    background: rgba(139, 174, 102, 0.3);
+    color: inherit;
+}
+
+/* Focus ring override */
+*:focus-visible {
+    outline-color: #8BAE66 !important;
+}
+
+/* Page heading */
+.fi-header-heading {
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Pagination hover */
+.fi-pagination-item:hover {
+    background: rgba(139, 174, 102, 0.15) !important;
+}
